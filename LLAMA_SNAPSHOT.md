@@ -1,4 +1,4 @@
-🧩 LLAMA DEV SNAPSHOT — v2025-07-23.3
+🧩 LLAMA DEV SNAPSHOT — v2025-07-25
 📌 Recent Highlights
 ✅ Clean venv rebuild (3.11.9)
 
@@ -30,21 +30,41 @@ redline-legal-api	8004	FastAPI
 explorer-prod	4173	Vite
 wolo-prod	26656/26657	Cosmos SDK
 
-🧩 VENV INFRASTRUCTURE SNAPSHOT — v2025-07-24
+🧩 VENV INFRASTRUCTURE SNAPSHOT — v2025-07-25
+1️⃣ Legacy (Python 3.11.9)
+📁 Repo	🧪 Env Name	Python Ver	Env Type	Auto-activation
+llama-chat-api	api311	3.11.9	pyenv-virtualenv	layout pyenv ✅
+llama-chat-app	app311	3.11.9	pyenv-virtualenv	layout pyenv ✅
+llama-api	llamaapi311	3.11.9	pyenv-virtualenv	layout pyenv ✅
+llama-dashboard	dashboard311	3.11.9	pyenv-virtualenv	layout pyenv ✅
 
-📁 Repo              | 🧪 Env Name     | Python Ver | Env Type         | Auto-activation
---------------------|----------------|------------|------------------|-----------------
-llama-chat-api      | api311         | 3.11.9     | pyenv-virtualenv | layout pyenv ✅
-llama-chat-app      | app311         | 3.11.9     | pyenv-virtualenv | layout pyenv ✅
-llama-api           | llamaapi311    | 3.11.9     | pyenv-virtualenv | layout pyenv ✅
-llama-dashboard     | dashboard311   | 3.11.9     | pyenv-virtualenv | layout pyenv ✅
+2️⃣ Auto-bootstrapped via direnv-bootstrap-all.sh (Python 3.12.3)
+📁 Repo	🧪 Env Name
+aoe2hd-parsing	aoe2hdparsing312
+api-prod	apiprod312
+api-prodf	apiprodf312
+api-prodn	apiprodn312
+api-staging	apistaging312
+llama-api	llamaapi312
+llama-backend	llamabackend312
+llama-chat-api	llamachatapi312
+llama-chat-app	llamachatapp312
+llama	llama312
+token_tap_api	tokentapapi312
 
-🧠 Activated by: direnv (.envrc) + .python-version
+3️⃣ Per-repo via direnv-bootstrap.sh (Python 3.13)
+📁 Repo	Venv Path
+llama-scripts	.direnv/python-3.13
+(symlinked helper)	for any project you cd into
+
+🧠 Activated by: direnv (.envrc) + either .python-version or .direnv/python-<VER>
 🧩 Shims route to: ~/.pyenv/shims/python
 
 🪝 SYMLINKS
 File	Linked In	Notes
 LLAMA_SNAPSHOT.md	llama-chat-api, llama-chat-app	✅ Global visibility
+direnv-bootstrap.sh	every project (via symlink)	✅ DRY propagation
+direnv-bootstrap-all.sh	top-level ~/projects	✅ Bulk bootstrap
 
 🐚 INFRA & DEV HYGIENE
 ✅ PM2 frontend: start-llama.sh
@@ -53,7 +73,7 @@ LLAMA_SNAPSHOT.md	llama-chat-api, llama-chat-app	✅ Global visibility
 
 ✅ Auto-activation: .envrc + pyenv local 3.11.9
 
-✅ Python: Clean 3.11.9 build
+✅ Python: clean 3.11.9 build
 
 ✅ Alias fix: unalias python && exec zsh
 
@@ -71,7 +91,7 @@ Framework: React 19.1 + Next.js 15.3.4 + Tailwind ✅
 
 Markdown: via ReactMarkdown ✅
 
-Streaming: via streamChat() ✅
+Streaming: streamChat() ✅
 
 Key Routes: /api/chat/send, /chat/messages/{agent}, /responses ✅
 
@@ -82,7 +102,7 @@ Backend: FastAPI @ :8005
 
 Live Endpoints: /stats/tokens, /system-vitals, /agents/health
 
-🔄 Auto-refresh: In progress
+Auto-refresh: In progress
 
 🧠 OLLAMA LLM (LOCAL)
 Model: llama3:8b-instruct-q4_K_M
@@ -116,15 +136,15 @@ Pruning	🔜	Next pass
 Manual validation	✅	All agents validated
 
 🔬 MEMORY ROADMAP — Q3 2025
-🥇 🔖 Tagging + 🧠 Embeddings
+🔖 Tagging + 🧠 Embeddings
 
-🥇 📁 Scoped filters
+📁 Scoped filters
 
-🥇 💬 GPT summaries
+💬 GPT summaries
 
-🥈 🧹 Pruning
+🧹 Pruning
 
-🥉 🧬 Mutation / Replay
+🧬 Mutation / Replay
 
 📂 Next: vector_memory.py
 
