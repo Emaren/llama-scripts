@@ -1,6 +1,14 @@
 #!/usr/bin/env zsh
-run_${0:t:r#*-}() {                           # e.g. run_python
-  _header "${0:t:r#*-:u}  MODULE (stub)"
-  _ok "placeholder"
+# Docker daemon + Colima state
+
+run_docker() {
+  _header "🐳  DOCKER / COLIMA"
+
+  docker info &>/dev/null \
+      && _ok  "Docker daemon running" \
+      || _fail "Docker daemon down"
+
+  colima status 2>/dev/null | grep -qE 'UP|Running' \
+      && _ok  "Colima running" \
+      || _warn "Colima not running"
 }
-export -f run_${0:t:r#*-}

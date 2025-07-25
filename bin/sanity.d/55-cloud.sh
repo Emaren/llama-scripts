@@ -1,6 +1,7 @@
 #!/usr/bin/env zsh
-run_${0:t:r#*-}() {                           # e.g. run_python
-  _header "${0:t:r#*-:u}  MODULE (stub)"
-  _ok "placeholder"
+run_cloud() {
+  _header "☁️  CLOUD CLI"
+
+  has aws && _ok "AWS CLI"  || _warn "AWS CLI missing"
+  has gh  && _ok "GitHub CLI" || _warn "gh CLI missing"
 }
-export -f run_${0:t:r#*-}

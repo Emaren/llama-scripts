@@ -1,6 +1,9 @@
 #!/usr/bin/env zsh
-run_${0:t:r#*-}() {                           # e.g. run_python
-  _header "${0:t:r#*-:u}  MODULE (stub)"
-  _ok "placeholder"
+run_precommit() {
+  _header "🧶  PRE-COMMIT"
+
+  [[ -f .pre-commit-config.yaml ]] || { _ok "no config – skipped"; return; }
+
+  pre-commit validate-config -q && _ok "config valid" \
+                                 || _fail "config invalid"
 }
-export -f run_${0:t:r#*-}
