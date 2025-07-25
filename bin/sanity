@@ -1,0 +1,388 @@
+#!/usr/bin/env zsh
+###############################################################################
+#  sanity — pragmatic shell-health checklist                              v4.3
+#  https://github.com/tonyblum/llama-scripts  (single-file, copy-paste ready)
+###############################################################################
+
+###############################################################################
+# ░░  CLI flags / version
+###############################################################################
+VERSION=4.3
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") [options]
+
+  -q               quiet  – hide INFO banners (still prints OK/WARN/FAIL)
+  -qq              silent – absolutely no stdout; rely on exit-code (0/1/2)
+  --json           emit machine-readable JSON (quiet implied)
+  --fix            attempt auto-remediation of failed checks
+  --bench          print shell-startup + runtime timings
+  --fast           skip slow checks (pyenv doctor, brew update)
+  --no-rc          do NOT source ~/.zshrc (handy for CI / cron jobs)
+  -v,  --version   print version and exit
+  -h,  --help      this message
+EOF
+}
+
+QUIET=0 SILENT=0 JSON=0 FIX=0 BENCH=0 SKIP_RC=0 FAST=0
+for arg in "$@"; do
+  case $arg in
+    -q)            QUIET=1 ;;
+    -qq)           QUIET=1; SILENT=1 ;;
+    --json)        QUIET=1; JSON=1 ;;
+    --fix)         FIX=1 ;;
+    --bench)       BENCH=1 ;;
+    --no-rc)       SKIP_RC=1 ;;
+    --fast)        FAST=1 ;;
+    -v|--version)  echo "$VERSION"; exit 0 ;;
+    -h|--help)     usage; exit 0 ;;
+    *)             echo "Unknown flag: $arg"; usage; exit 1 ;;
+  esac
+done
+[[ $SILENT == 1 && $JSON == 1 ]] && { echo "Cannot use --json with -qq"; exit 1; }
+[[ $SILENT == 1 ]] && exec >/dev/null
+# complain on unset vars, propagate pipe errors
+# (-e kills the script before later checks can print; we track failures ourselves)
+set -uo pipefail
+
+###############################################################################
+# ░░  import interactive environment (never abort if RC is broken)
+###############################################################################
+if [[ $SKIP_RC -eq 0 && -f ~/.zshrc ]]; then
+  set +e                              # disable errexit temporarily
+  source ~/.zshrc >/dev/null 2>&1 || true
+# set -e                              # <- remove: we handle errors ourselves
+fi
+
+# minimal env tweaks
+export NVM_SILENT=true NVM_INSTALL_COMPLETIONS=false
+setopt INTERACTIVE_COMMENTS           # allow # inside heredocs
+
+START_TS=$(date +%s%3N)
+
+###############################################################################
+# ░░  colours & helpers
+###############################################################################
+if [[ -t 1 && $TERM != dumb && $JSON -eq 0 ]]; then
+  RED=$'\033[31m'; GRN=$'\033[32m'; YLW=$'\033[33m'; BLU=$'\033[1;34m'; RST=$'\033[0m'
+else
+  RED= GRN= YLW= BLU= RST=
+fi
+
+WARNED=0 FAILED=0
+cols()      { tput cols 2>/dev/null || echo 80; }
+_line()     { printf '─%.0s' $(seq 1 "$(( ( $(cols)<60?60:$(cols) ) -1 ))"); }
+_info()     { (( QUIET )) || { printf '\n%s%s%s\n' "$BLU" "$*" "$RST"; }; }
+_divider()  { (( QUIET )) || { printf '\n%s' "$BLU"; _line; printf '─%s\n' "$RST"; }; }
+_ok()       { (( QUIET )) || printf '   %sOK%s\n'   "$GRN" "$RST"; \
+              [[ $JSON -eq 1 ]] && _emit_json "$label" "OK"; }
+_warn()     { printf '   %sWARN%s %s\n' "$YLW" "$RST" "$1"; WARNED=1; \
+              [[ $JSON -eq 1 ]] && _emit_json "$label" "WARN" "$1"; }
+_fail()     { printf '   %sFAIL%s ← %s\n' "$RED" "$RST" "$1"; FAILED=1; \
+              [[ $JSON -eq 1 ]] && _emit_json "$label" "FAIL" "$1"; }
+has()       { command -v "$1" &>/dev/null; }
+_emit_json(){ printf '{"check":"%s","status":"%s","msg":"%s"}\n' \
+              "${1//\"/\\\"}" "${2//\"/\\\"}" "${3:-}"; }
+
+check() {                    # check "Label" 'test-cmd' [warn] [fix]
+  label=$1 test=$2 warn=${3:-} fixer=${4:-}
+  (( QUIET )) || printf '%-34s … ' "$label"
+  if eval "$test" &>/dev/null; then _ok
+  elif [[ -n $warn ]]; then
+    _warn "$warn"
+    [[ $FIX -eq 1 && -n $fixer ]] && _apply_fix "$fixer"
+  else
+    _fail "$test"
+    [[ $FIX -eq 1 && -n $fixer ]] && _apply_fix "$fixer"
+  fi
+
+    (( ${+SLEEP} )) && sleep $SLEEP
+}
+
+_apply_fix() {           # _apply_fix "<command to run>"
+  local cmd=$1
+  local timeout_s=15     # change to taste
+
+  (( QUIET )) || printf '      attempting fix → %s … ' "$cmd"
+
+  # Run command with timeout; GNU and macOS both have 'command timeout'
+  if command -v timeout &>/dev/null; then
+    timeout "$timeout_s" bash -c "$cmd" &>/dev/null
+  else
+    # fallback: run in background and kill after timeout
+    bash -c "$cmd" &>/tmp/sanity_fix.$$ &
+    local pid=$!
+    (sleep "$timeout_s"; kill -0 $pid 2>/dev/null && kill $pid) & disown
+    wait $pid 2>/dev/null
+  fi
+
+  if [[ $? -eq 0 ]]; then
+    (( QUIET )) || printf '%sOK%s\n' "$GRN" "$RST"
+  else
+    (( QUIET )) || printf '%sFAIL (timed-out)%s\n' "$RED" "$RST"
+  fi
+}
+
+probe(){ check "$@"; }  # legacy alias
+
+###############################################################################
+# ░░  bootstrap NVM & direnv (silent)
+###############################################################################
+export NVM_DIR="$HOME/.nvm"
+[[ -s "$NVM_DIR/nvm.sh" ]] && . "$NVM_DIR/nvm.sh" >/dev/null
+has direnv && eval "$(direnv export bash)" || true
+
+###############################################################################
+# ░░  SHELL LINT (self)
+###############################################################################
+if has shellcheck; then
+  _divider; _info "🪄  SHELL LINT"
+  shellcheck -q "$0" && _ok || _warn 'ShellCheck warnings'
+fi
+if has shfmt; then
+  check "shfmt compliant" 'shfmt -d "$0" | grep -q "^$"' "(run: shfmt -w sanity)"
+fi
+
+###############################################################################
+# ░░  PYTHON
+###############################################################################
+if has pyenv; then
+  _divider; _info "🐍  PYTHON TOOLCHAIN"
+  if (( FAST )); then
+    _info "🐍  FAST mode – skipping pyenv doctor"
+  else
+    probe "pyenv doctor" "pyenv doctor"
+  fi
+  [[ $FAST -eq 1 ]] || \
+  probe "python ⩾3.12" 'python - <<PY
+import sys; sys.exit(0 if sys.version_info>=(3,12) else 1)
+PY' "(upgrade Python)" "pyenv install 3.12.3 && pyenv global 3.12.3"
+
+  probe "pre-commit ⩾4" \
+        '[[ "$(pre-commit --version 2>/dev/null || true)" =~ " 4[.]" ]]' \
+        "(pipx install pre-commit)" "pipx install pre-commit"
+
+  # pipx normally installs its shims in ~/.local/bin
+  check "pipx on PATH" 'command -v pipx' \
+        "(pipx install pipx && pipx ensurepath)"
+
+  python - <<'PY' && _IN_VENV=true || _IN_VENV=false
+import sys; sys.exit(0 if sys.prefix!=getattr(sys,"base_prefix",sys.prefix) else 1)
+PY
+  if $_IN_VENV; then
+    probe "interpreter inside venv" true
+    probe "pip ↔ python match" 'python -m pip -V | grep -F "$(python - <<PY
+import sys, pathlib; print(pathlib.Path(sys.executable).resolve())
+PY
+)"'
+  else probe "no venv expected" true; fi
+
+  check "single pyenv shim path" \
+        'tr ":" "\n" <<<"$PATH" | grep -c "/.pyenv/shims" | grep -q "^1$"'
+else
+  _info "🐍  Pyenv not installed — skipping"
+fi
+
+###############################################################################
+# ░░  NODE / NVM  (hardened for set -e environments)
+###############################################################################
+if has nvm && nvm --version >/dev/null 2>&1; then
+  _divider; _info "🟢  NODE / NVM"
+
+  set +e               # ─── suspend ‘exit-on-error’ just for this block ──▶
+
+  # safest way to resolve the intended “default” version
+  def_ver=$( nvm version default 2>/dev/null || echo N/A )
+  if [[ $def_ver == N/A || -z $def_ver ]]; then
+    def_ver=$( nvm version-remote --lts 2>/dev/null || echo N/A )
+    [[ $def_ver != N/A ]] && {
+      nvm install --silent "$def_ver" &>/dev/null
+      nvm alias default "$def_ver"    &>/dev/null
+    }
+  fi
+
+  # pivot to the default version if current shell isn’t already there
+  node_ver=$( node -v 2>/dev/null | tr -d '\n' || echo none )
+  [[ $node_ver != "$def_ver" && $def_ver != N/A ]] && \
+        nvm use --silent "$def_ver" &>/dev/null || true
+  node_ver=$( node -v 2>/dev/null | tr -d '\n' || echo none )
+
+  check "alias default ⇒ $def_ver" '[ "$def_ver" != "N/A" ]'
+  check "Node version = default"  '[ "$node_ver" = "$def_ver" ]' "(node $node_ver)"
+  check "npm cli present" 'command -v npm'
+# set -e               # <- remove
+else
+  _info "🟢  NVM not installed — skipping"
+fi
+
+###############################################################################
+# ░░  ENV MANAGEMENT
+###############################################################################
+if has direnv; then
+  _divider; _info "✨  ENV MANAGEMENT"
+  dstat=$( direnv status 2>/dev/null || true )
+  case $dstat in
+    *"Loaded RC allowed"*) check ".envrc allowed"  true ;;
+    *"Blocked RC"*)        check ".envrc allowed"  false "(direnv allow)" "direnv allow" ;;
+    *"Found RC path"*)     check ".envrc allowed"  true  "(no .envrc here)" ;;
+    *)                     check ".envrc allowed"  true  "(direnv inactive)" ;;
+  esac
+else
+  _info "✨  Direnv not installed — skipping"
+fi
+
+has pyenv && \
+  check "direnv sees pyenv env" '[ $(pyenv version-name) != system ]'
+
+check "Starship git_status" \
+      'grep -q "\[git_status\]" ~/.config/starship.toml' "(enable VCS prompt)"
+
+###############################################################################
+# ░░  PATH SANITY
+###############################################################################
+_divider; _info "🛣  PATH SANITY"
+
+check "no duplicate PATH segments" \
+      '[[ -z $(tr ":" "\n" <<<"$PATH" | sort | uniq -d) ]]'
+
+check "~/.local/bin present" \
+      'grep -q "$HOME/.local/bin" <<<"$PATH"' \
+      "(prepend to PATH)" \
+      'echo "export PATH=\"$HOME/.local/bin:\$PATH\"" >> ~/.zshrc'
+
+###############################################################################
+# ░░  GIT
+###############################################################################
+if has git && git rev-parse --is-inside-work-tree &>/dev/null; then
+  _divider; _info "🔧  GIT BASICS"
+
+  check "git available"      'git --version'
+  check "git user.name set"  'git config --global user.name' \
+        "(git config --global user.name …)"
+  check "git user.email set" 'git config --global user.email' \
+        "(git config --global user.email …)"
+
+  ahead_behind=$( git rev-list --left-right --count @{u}...HEAD 2>/dev/null || echo "0	0" )
+  [[ $ahead_behind == "0	0" ]] \
+       && check "repo in sync" true \
+       || check "repo in sync" false "(git pull/push)"
+else
+  _info "🔧  Not in a git repo — skipping repo checks"
+fi
+
+###############################################################################
+# ░░  DOCKER / CLOUD CLI
+###############################################################################
+_divider; _info "🐳  DOCKER & CLOUD"
+
+check "Docker daemon"  'docker info &>/dev/null' \
+      "(start Docker-Desktop or Colima)" "colima start"
+check "Colima running" 'colima status 2>/dev/null | grep -q UP' \
+      "(colima start)" "colima start"
+check "AWS CLI"        'aws --version' "(brew install awscli)" "brew install awscli"
+check "gh CLI"         'gh  --version' "(brew install gh)"     "brew install gh"
+
+###############################################################################
+# ░░  DEVOPS / LANG MANAGERS (optional)
+###############################################################################
+_divider; _info "☸️  EXTRA TOOLING"
+
+# --- Poetry -----------------------------------------------------------------
+check "Poetry CLI"  'command -v poetry' \
+     "(pipx install poetry)"  "pipx install poetry"
+
+# ‣ Only check the virtual-env when *inside* a Poetry project
+if [[ -f pyproject.toml ]] && command -v poetry &>/dev/null; then
+  probe "poetry venv OK" 'poetry env info --path >/dev/null'
+fi
+
+# --- Terraform --------------------------------------------------------------
+check "Terraform CLI" 'command -v terraform' \
+     "(brew install terraform)" "brew install terraform"
+
+# --- kubectl ----------------------------------------------------------------
+check "kubectl CLI"  'command -v kubectl' \
+     "(brew install kubectl)" "brew install kubectl"
+
+# --- Helm -------------------------------------------------------------------
+check "Helm CLI"     'command -v helm' \
+     "(brew install helm)"    "brew install helm"
+
+###############################################################################
+# ░░  HOMEBREW
+###############################################################################
+if has brew; then
+  _divider; _info "🍺  HOMEBREW"
+
+  # ── brew doctor (give it max 15 s so the script never hangs) ──────────────
+  check "brew doctor clean" \
+        '{
+           if command -v timeout &>/dev/null; then
+             timeout 15 brew doctor
+           else
+             brew doctor
+           fi
+         } | grep -q "^Your system is ready to brew\\."' \
+        "(run: brew doctor)"
+
+  # ── security-critical upgrades (skip when --fast or jq missing) ───────────
+  if has jq; then
+    (( FAST )) || brew update --quiet &>/dev/null || true   # silent refresh
+
+    sec_up=$(
+      { HOMEBREW_NO_AUTO_UPDATE=1 \
+        brew outdated --greedy --json=v2 2>/dev/null || true; } |
+      jq '[ (.formulae[]?.name // empty)
+            ,(.casks[]?.token // empty) ]          # collect all names
+          | map(select(test("-security$")))        # keep *-security packages
+          | length'
+    )
+
+    check "no pending security upgrades" \
+          "[[ ${sec_up:-0} -eq 0 ]]" "($sec_up security updates)" \
+          "brew upgrade --greedy"
+  else
+    _warn "jq missing — skipping security-upgrade scan"
+  fi
+
+  # ── good-practice: disable phone-home analytics ───────────────────────────
+  check "brew analytics off" \
+        '[[ "$(brew analytics 2>/dev/null)" == "Analytics are disabled."* ]]' \
+        "(brew analytics off)" "brew analytics off"
+
+else
+  _info "🍺  Homebrew not installed — skipping"
+fi
+
+###############################################################################
+# ░░  pre-commit config
+###############################################################################
+check "pre-commit config valid" \
+      '[[ ! -f .pre-commit-config.yaml || $(pre-commit validate-config -q && echo ok) ]]' \
+      "(missing or invalid file)"
+
+###############################################################################
+# ░░  BENCHMARKS
+###############################################################################
+if (( BENCH )); then
+  SHELL_TIME=$(( $(date +%s%3N) - ${ZSH_START_TIME:-0} ))
+  SCRIPT_TIME=$(( $(date +%s%3N) - START_TS ))
+  _divider; _info "⏱  TIMINGS"
+  check "shell startup <500 ms"   "[[ $SHELL_TIME  -lt 500 ]]"  "(slow: ${SHELL_TIME} ms)"
+  check "sanity runtime <2000 ms" "[[ $SCRIPT_TIME -lt 2000 ]]" "(${SCRIPT_TIME} ms)"
+fi
+
+###############################################################################
+# ░░  Summary / exit codes
+###############################################################################
+_divider
+if   (( FAILED )); then
+  echo -e "${RED}✖ Some checks FAILED${RST}"
+  exit 2                    # hard failure
+elif (( WARNED )); then
+  echo -e "${YLW}▲ Completed with WARNs${RST}"
+  exit 1                    # soft warnings
+else
+  echo -e "${GRN}✔ All good${RST}"
+  exit 0                    # perfect score
+fi
