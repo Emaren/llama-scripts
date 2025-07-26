@@ -5,9 +5,17 @@ set -euo pipefail
 LEGACY_PYENV=("llama-chat-api" "llama-chat-app" "llama-api" "llama-dashboard")
 USE_PY313=("llama-scripts")  # Add more Py3.13 repos here if needed
 
-BOOTSTRAP_ALL="./llama-scripts/direnv-bootstrap-all.sh"
-BOOTSTRAP_ONE="./llama-scripts/direnv-bootstrap.sh"
+BOOTSTRAP_ALL="./direnv-bootstrap-all.sh"
+BOOTSTRAP_ONE="./direnv-bootstrap.sh"
+REPAIR_SCRIPT="./repair-missing-venvs.sh"
+MISSING_LOG="./venv-missing.log"
 PROJECT_ROOT="$HOME/projects"
+
+# ─── OPTIONAL AUTO-REPAIR ──────────────────────────────────────────────
+if [[ -s "$MISSING_LOG" ]]; then
+  echo "🔧 Detected non-empty $MISSING_LOG — repairing missing venvs..."
+  bash "$REPAIR_SCRIPT"
+fi
 
 # ─── MAIN LOOP ──────────────────────────────────────────────────────────
 cd "$PROJECT_ROOT"
@@ -48,4 +56,4 @@ for dir in */ ; do
   )
 done
 
-echo "✅ All 36 venvs processed!"
+echo "✅ All venvs processed!"

@@ -19,6 +19,7 @@ Usage: $(basename "$0") [options]
   --bench          print shell-startup + runtime timings
   --fast           skip slow checks (pyenv doctor, brew update)
   --no-rc          do NOT source ~/.zshrc (handy for CI / cron jobs)
+  --direnv-audit     audit .envrc validity + venv presence + .direnv folder size
   -v,  --version   print version and exit
   -h,  --help      this message
 EOF
@@ -34,15 +35,27 @@ for arg in "$@"; do
     --bench)       BENCH=1 ;;
     --no-rc)       SKIP_RC=1 ;;
     --fast)        FAST=1 ;;
+    --direnv-audit)
+      echo "📋 Direnv Audit — Checking all projects for valid .envrc + venv..."
+      "$HOME/projects/llama-scripts/bin/direnv-audit.sh"
+      exit 0 ;;
     -v|--version)  echo "$VERSION"; exit 0 ;;
     -h|--help)     usage; exit 0 ;;
     *)             echo "Unknown flag: $arg"; usage; exit 1 ;;
   esac
 done
+
 [[ $SILENT == 1 && $JSON == 1 ]] && { echo "Cannot use --json with -qq"; exit 1; }
 [[ $SILENT == 1 ]] && exec >/dev/null
+
+# ⬇️ New block for llama-status
+if [[ "${1:-}" == "direnv-audit" ]]; then
+  echo "📋 Direnv Audit — Checking all projects for valid .envrc + venv..."
+  "$HOME/projects/llama-scripts/bin/direnv-audit.sh"
+  exit 0
+fi
+
 # complain on unset vars, propagate pipe errors
-# (-e kills the script before later checks can print; we track failures ourselves)
 set -uo pipefail
 
 ###############################################################################
@@ -361,6 +374,42 @@ fi
 check "pre-commit config valid" \
       '[[ ! -f .pre-commit-config.yaml || $(pre-commit validate-config -q && echo ok) ]]' \
       "(missing or invalid file)"
+
+###############################################################################
+# ░░  DIR ENV AUDIT MODE
+###############################################################################
+if [[ "$1" == "--direnv-audit" || "$1" == "-da" ]]; then
+  _divider
+  _info "📦 Direnv Audit: Scanning ~/projects/*/.direnv …"
+  for d in ~/projects/*/.direnv; do
+    [[ -d "$d" ]] || continue
+    project=$(basename "$(dirname "$d")")
+    envrc="${d%/.direnv}/.envrc"
+
+    printf '%-30s' "$project"
+
+    if [[ -f "$envrc" ]]; then
+      if bash -n "$envrc" &>/dev/null; then
+        venv_line=$(grep -E "layout python|source venv/bin/activate" "$envrc" | head -n 1)
+        if [[ -n "$venv_line" ]]; then
+          echo "${GRN}✅ .envrc valid / Venv: ✅${RST}"
+        else
+          echo "${YLW}✅ .envrc valid / Venv: ❌${RST}"
+        fi
+      else
+        echo "${RED}❌ .envrc invalid syntax${RST}"
+      fi
+    else
+      echo "${RED}❌ .envrc missing${RST}"
+    fi
+  done
+
+  _divider
+  _info "🧹 Largest .direnv folders by size:"
+  du -sh ~/projects/*/.direnv 2>/dev/null | sort -hr | head -n 10 | awk '{printf "  %s\t%s\n", $1, $2}'
+
+  exit 0
+fi
 
 ###############################################################################
 # ░░  BENCHMARKS

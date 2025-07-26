@@ -1,6 +1,10 @@
 #!/usr/bin/env zsh
 set -euo pipefail
 
+: ${SANITY_JSON:=0}
+: ${SANITY_FAST:=0}
+: ${SANITY_FIX:=0}
+
 # ---------- colours ----------
 autoload -U colors && colors
 _ok()    { print -P "%F{green}✔ OK%f  $1";   _json "OK"    "$1"; }
@@ -78,3 +82,12 @@ _apply_fix() { local msg=$1 cmd=$2
        eval "$cmd" && _ok "$msg fixed" || _fail "$msg fix failed"
   fi
 }
+
+# Add to the bottom of lib/sanity-lib.sh
+if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then
+  _header "Test Run: sanity-lib.sh"
+  _ok "Diagnostics loaded"
+  _warn "Simulated warning"
+  _fail "Simulated failure"
+  _summary_and_exit
+fi

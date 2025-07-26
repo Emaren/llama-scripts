@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# 🧪 Require jq
+if ! command -v jq >/dev/null 2>&1; then
+  echo "❌ 'jq' is required. Install with: brew install jq"
+  exit 1
+fi
+
+# 🌐 Config
+: "${REMOTE_HOST:=api.aoe2hdbets.com}"
+IS_VPS=false
+
+# 🤖 Auto-detect environment
+if hostname | grep -qi "wolo"; then
+  IS_VPS=true
+elif [[ "$(uname -n)" == *wolo* ]]; then
+  IS_VPS=true
+fi
+
+# 🔧 Node ports
+declare -A nodes=(
+  [wolodev]=1317
+  [wolo-prod]=1327
+  [wolo-staging]=1337
+)
+
+# 🔁 Loop through nodes
+for node in "${!nodes[@]}"; do
+  port=${nodes[$node]}
+  echo "==============================="
+  echo " $node (port $port)"
+  echo "-------------------------------"
+
+  if [ "$IS_VPS" = true ]; then
+    base_url="http://localhost:$port"
+  else
+    base_url="http://$REMOTE_HOST:$port"
+  fi
+
+  curl -s "$base_url/cosmos/base/tendermint/v1beta1/node_info" \
+    | jq '.default_node_info.network, .application_version.cosmos_sdk_version' \
+    || echo "❌ Failed to fetch node_info"
+
+  curl -s "$base_url/cosmos/base/tendermint/v1beta1/syncing" \
+    | jq || echo "❌ Failed to fetch syncing status"
+
+  curl -s "$base_url/cosmos/base/tendermint/v1beta1/blocks/latest" \
+    | jq '.block.header.height' \
+    || echo "❌ Failed to fetch block height"
+
+  echo ""
+done
