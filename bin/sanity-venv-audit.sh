@@ -3,7 +3,9 @@ set -euo pipefail
 shopt -s nullglob
 
 ROOT="$HOME/projects"
-OUTFILE="$ROOT/llama-scripts/venv-missing.log"
+LOGDIR="$ROOT/llama-scripts/venv-logs"
+mkdir -p "$LOGDIR"
+OUTFILE="$LOGDIR/venv-missing.log"
 > "$OUTFILE"
 
 shorten_path() {
