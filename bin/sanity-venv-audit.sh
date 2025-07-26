@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-# Summarize Python venv info for all ~/projects/*
-# Displays: repo, python version, venv type, resolved path
-# 💡 Also writes a list of missing venvs to venv-missing.log
-
 set -euo pipefail
 shopt -s nullglob
 
@@ -10,47 +6,79 @@ ROOT="$HOME/projects"
 OUTFILE="$ROOT/llama-scripts/venv-missing.log"
 > "$OUTFILE"
 
-printf "\n📦 Python Venv Audit for %s\n" "$ROOT"
-printf "%-24s | %-10s | %-12s | %s\n" "Repo" "Version" "Venv Type" "Python Path"
-printf "%s\n" "------------------------+------------+--------------+------------------------------"
+# Collapse full path to "~/.p/<repo>/...python"
+shorten_path() {
+  echo "${1/#$HOME/~}" \
+    | sed -E 's|/Users/[^/]+/projects/([^/]+)/.*|~/.p/\1/...python|'
+}
 
+# ───── Table Header ─────
+printf "\n📊 Global Python Venv Audit — %s\n\n" \
+  "$(date '+%Y-%m-%d %H:%M')"
+
+# ───── COLUMN WIDTHS ─────
+w1=22  # Repo
+w2=8   # Version
+w3=14  # Type
+w4=12  # Freeze Age
+w5=9   # Health
+w6=32  # Python Path
+w7=12  # Hints
+
+# ───── ROW FORMAT ─────
+fmt="%-${w1}s │ %-${w2}s │ %-${w3}s │ %-${w4}s │ %-${w5}s │ %-${w6}s │ %-${w7}s\n"
+
+# ───── PRINT HEADER ─────
+printf "$fmt" "Repo" "Version" "Type" "Freeze Age" "Health" "Python Path" "Hints"
+printf '───────────────────────┼──────────┼────────────────┼──────────────┼───────────┼──────────────────────────────────┼─────────────\n'
+
+# ───── ROW LOOP ─────
 for dir in "$ROOT"/*/; do
-  repo="$(basename "$dir")"
+  repo=${dir%/}; repo=${repo##*/}
   cd "$dir" || continue
 
-  PYTHON_BIN=""
-  VENV_TYPE="—"
-  VERSION="—"
+  PYBIN="" VERSION="—" VTYPE="—" FAGE="—" HEALTH="❌"
+  PYPATH="(not found)" HINTS=()
 
-  # 1. Check for .direnv/python-*/bin/python
-  if [[ -x ".direnv/python-3.13/bin/python" ]]; then
-    PYTHON_BIN="$dir/.direnv/python-3.13/bin/python"
-    VENV_TYPE="direnv-local"
-
-  # 2. Fallback: search .direnv just in case
-  elif [[ -d ".direnv" ]]; then
-    PYTHON_BIN="$(find .direnv -path "*/bin/python" -type f 2>/dev/null | head -n1 || true)"
-    if [[ -n "$PYTHON_BIN" && -x "$PYTHON_BIN" ]]; then
-      VENV_TYPE="direnv-unknown"
-    fi
-
-  # 3. Check for legacy pyenv-based venv
+  # locate python
+  if [[ -x .direnv/python-3.13/bin/python ]]; then
+    PYBIN=".direnv/python-3.13/bin/python"; VTYPE="direnv-local"
+  elif [[ -d .direnv ]]; then
+    PYBIN=$(find .direnv -path '*/bin/python' -type f | head -1)
+    [[ -n $PYBIN ]] && VTYPE="direnv-unknown"
   elif [[ -f .python-version ]]; then
-    envname=$(cat .python-version)
-    PYTHON_BIN="$(pyenv root)/versions/$envname/bin/python"
-    VENV_TYPE="pyenv-layout"
+    env=$(<.python-version)
+    PYBIN="$(pyenv root)/versions/$env/bin/python"; VTYPE="pyenv-layout"
   fi
 
-  # Resolve version
-  if [[ -x "$PYTHON_BIN" ]]; then
-    VERSION="$("$PYTHON_BIN" -c 'import sys; print(".".join(map(str, sys.version_info[:3])))')"
+  # version & health
+  if [[ -x $PYBIN ]]; then
+    VERSION="$("$PYBIN" -c 'import sys; print(".".join(map(str,sys.version_info[:3])))')"
+    "$PYBIN" -c 'import sys' &>/dev/null && HEALTH="✅"
+    PYPATH=$(shorten_path "$PYBIN")
   else
-    PYTHON_BIN="(not found)"
-    echo "$repo" >> "$OUTFILE"
+    echo "$repo" >>"$OUTFILE"
+    HINTS+=("🛠 missing")
   fi
 
-  printf "%-24s | %-10s | %-12s | %s\n" "$repo" "$VERSION" "$VENV_TYPE" "$PYTHON_BIN"
+  # freeze-age & drift hint
+  lf=$(ls -t venv-freeze-*.log 2>/dev/null | head -1 || true)
+  if [[ -n $lf ]]; then
+    m=$(stat -f "%m" "$lf"); now=$(date +%s)
+    d=$(( (now - m) / 86400 ))
+    FAGE="${d}d"; (( d>0 )) && FAGE+=" 🚨"
+    if [[ -f requirements.txt ]] && ! diff -q requirements.txt "$lf" &>/dev/null; then
+      HINTS+=("🧹 drift")
+    fi
+  else
+    HINTS+=("📄 no-freeze")
+  fi
+
+  # print the row
+  printf "$fmt" \
+    "$repo" "$VERSION" "$VTYPE" "$FAGE" "$HEALTH" "$PYPATH" "${HINTS[*]:-}"
 done
 
-echo -e "\n📄 Missing venvs written to: $OUTFILE"
-echo "✅ Done. This is a snapshot of venv state across all your repos."
+# ───── FOOTER ─────
+echo -e "\n📄 Broken or missing venvs logged to: $OUTFILE"
+echo "✅ Done."
