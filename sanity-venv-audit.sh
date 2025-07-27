@@ -2,13 +2,28 @@
 set -euo pipefail
 shopt -s nullglob
 
-ROOT="$HOME/projects"
-OUTFILE="$ROOT/llama-scripts/venv-missing.log"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
+
+# ───── Detect root path ─────
+if [[ -d /var/www && "$(hostname)" == "wolo" ]]; then
+  ROOT="/var/www"
+else
+  ROOT="$HOME/projects"
+fi
+
+OUTFILE="/tmp/venv-missing-$(date +%s).log"
 > "$OUTFILE"
 
+# ───── Path shortening logic ─────
 shorten_path() {
-  echo "${1/#$HOME/~}" \
-    | sed -E 's|/Users/[^/]+/projects/([^/]+)/.*|~/.p/\1/...python|'
+  case "$1" in
+    "$HOME"/*)
+      echo "${1/#$HOME/~}" ;;
+    /var/www/*)
+      echo "${1/#\/var\/www/\/var/www}" ;;
+    *)
+      echo "$1" ;;
+  esac
 }
 
 # ───── Table Settings ─────
@@ -51,11 +66,15 @@ for dir in "$ROOT"/*/; do
   fi
 
   if [[ -f venv-freeze.log ]]; then
-    m=$(stat -f "%m" venv-freeze.log); now=$(date +%s)
+    if stat -f "%m" . &>/dev/null; then
+      m=$(stat -f "%m" venv-freeze.log)  # macOS
+    else
+      m=$(stat -c "%Y" venv-freeze.log)  # Linux
+    fi
+    now=$(date +%s)
     d=$(( (now - m) / 86400 ))
     FAGE="${d}d"; (( d>0 )) && FAGE+=" 🚨"
 
-    # Check for freeze drift
     TMP_FREEZE=$(mktemp)
     "$PYBIN" -m pip freeze > "$TMP_FREEZE" 2>/dev/null || true
     if ! diff -q "$TMP_FREEZE" venv-freeze.log &>/dev/null; then

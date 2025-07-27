@@ -1,0 +1,14 @@
+      2 watchdog
+      2 uvicorn[standard]
+      2 SQLAlchemy[asyncio]
+      2 python-dotenv
+      2 psycopg[binary]
+      2 psycopg2-binary>=2.9
+      2 mgz==1.8.27
+      2 firebase-admin>=6.0.0
+      2 fastapi
+      2 construct==2.8.16
+      2 asyncpg
+      2 alembic
+      2 aiofiles
+      2 

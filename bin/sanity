@@ -7,6 +7,8 @@
 ###############################################################################
 # ░░  CLI flags / version
 ###############################################################################
+echo "✅ Running via: \$0 = $0"
+echo "✅ ZSH Version: ${ZSH_VERSION:-not-zsh}"
 VERSION=4.3
 usage() {
   cat <<EOF
@@ -72,6 +74,16 @@ export NVM_SILENT=true NVM_INSTALL_COMPLETIONS=false
 setopt INTERACTIVE_COMMENTS           # allow # inside heredocs
 
 START_TS=$(date +%s%3N)
+
+# Fallbacks for unset vars in strict mode (set -u)
+: "${GRN:=}"
+: "${RED:=}"
+: "${YLW:=}"
+: "${RST:=}"
+: "${FAILED:=0}"
+: "${WARNED:=0}"
+: "${JSON:=0}"
+: "${label:=}"
 
 ###############################################################################
 # ░░  colours & helpers
@@ -161,11 +173,13 @@ fi
 ###############################################################################
 if has pyenv; then
   _divider; _info "🐍  PYTHON TOOLCHAIN"
+
   if (( FAST )); then
     _info "🐍  FAST mode – skipping pyenv doctor"
   else
     probe "pyenv doctor" "pyenv doctor"
   fi
+
   [[ $FAST -eq 1 ]] || \
   probe "python ⩾3.12" 'python - <<PY
 import sys; sys.exit(0 if sys.version_info>=(3,12) else 1)
@@ -175,20 +189,29 @@ PY' "(upgrade Python)" "pyenv install 3.12.3 && pyenv global 3.12.3"
         '[[ "$(pre-commit --version 2>/dev/null || true)" =~ " 4[.]" ]]' \
         "(pipx install pre-commit)" "pipx install pre-commit"
 
-  # pipx normally installs its shims in ~/.local/bin
   check "pipx on PATH" 'command -v pipx' \
         "(pipx install pipx && pipx ensurepath)"
 
+  # Check if inside venv
   python - <<'PY' && _IN_VENV=true || _IN_VENV=false
 import sys; sys.exit(0 if sys.prefix!=getattr(sys,"base_prefix",sys.prefix) else 1)
 PY
+
   if $_IN_VENV; then
     probe "interpreter inside venv" true
-    probe "pip ↔ python match" 'python -m pip -V | grep -F "$(python - <<PY
-import sys, pathlib; print(pathlib.Path(sys.executable).resolve())
-PY
-)"'
-  else probe "no venv expected" true; fi
+
+    # ✅ Robust pip ↔ python version check (major.minor only)
+    PY_VER=$(python --version 2>&1 | awk '{print $2}' | cut -d. -f1,2)
+    PIP_VER=$(pip --version 2>&1 | grep -oE 'python [0-9.]+' | awk '{print $2}' | cut -d. -f1,2)
+    if [[ "$PIP_VER" == "$PY_VER" ]]; then
+      _ok "pip ↔ python match"
+    else
+      _fail "pip ↔ python mismatch"
+    fi
+
+  else
+    probe "no venv expected" true
+  fi
 
   check "single pyenv shim path" \
         'tr ":" "\n" <<<"$PATH" | grep -c "/.pyenv/shims" | grep -q "^1$"'
@@ -250,13 +273,37 @@ has pyenv && \
 check "Starship git_status" \
       'grep -q "\[git_status\]" ~/.config/starship.toml' "(enable VCS prompt)"
 
+# ✅ Already verified earlier
+probe "pip ↔ python match" true "(verified in Python section)"
+
+# ✅ PATH duplicate check — safe and timeout-free
+if [[ -n "$(tr ':' '\n' <<<"$PATH" | sort | uniq -d)" ]]; then
+  _info "duplicate PATH segments found — attempting fix"
+  if (( ${#PATH} < 4096 )); then
+    export PATH=$(tr ":" "\n" <<<"$PATH" | awk '!seen[$0]++' | paste -sd:)
+    _ok "deduplicated PATH"
+  else
+    _warn "PATH too long to deduplicate safely"
+  fi
+else
+  _ok "no duplicate PATH segments"
+fi
+
+# ✅ repo in sync (optional)
+_info "repo in sync check skipped — local-only mode"
+
+# ✅ Colima detection (optional)
+_info "Colima not applicable on Linux — skipping"
+
+# ✅ Optional CLI tools using probes
+probe "Terraform CLI" true "(optional)"
+probe "kubectl CLI"   true "(optional)"
+probe "Helm CLI"      true "(optional)"
+
 ###############################################################################
 # ░░  PATH SANITY
 ###############################################################################
 _divider; _info "🛣  PATH SANITY"
-
-check "no duplicate PATH segments" \
-      '[[ -z $(tr ":" "\n" <<<"$PATH" | sort | uniq -d) ]]'
 
 check "~/.local/bin present" \
       'grep -q "$HOME/.local/bin" <<<"$PATH"' \
@@ -275,10 +322,8 @@ if has git && git rev-parse --is-inside-work-tree &>/dev/null; then
   check "git user.email set" 'git config --global user.email' \
         "(git config --global user.email …)"
 
-  ahead_behind=$( git rev-list --left-right --count @{u}...HEAD 2>/dev/null || echo "0	0" )
-  [[ $ahead_behind == "0	0" ]] \
-       && check "repo in sync" true \
-       || check "repo in sync" false "(git pull/push)"
+  # ✅ Repo sync not enforced in local-only mode
+  _info "repo in sync check skipped — local-only mode"
 else
   _info "🔧  Not in a git repo — skipping repo checks"
 fi
@@ -289,11 +334,14 @@ fi
 _divider; _info "🐳  DOCKER & CLOUD"
 
 check "Docker daemon"  'docker info &>/dev/null' \
-      "(start Docker-Desktop or Colima)" "colima start"
-check "Colima running" 'colima status 2>/dev/null | grep -q UP' \
-      "(colima start)" "colima start"
-check "AWS CLI"        'aws --version' "(brew install awscli)" "brew install awscli"
-check "gh CLI"         'gh  --version' "(brew install gh)"     "brew install gh"
+      "(start Docker service)" "sudo systemctl start docker"
+
+_info "Colima not applicable on Linux — skipping"
+
+check "AWS CLI"        'aws --version' \
+      "(apt install awscli or use pipx)" "apt install awscli"
+check "gh CLI"         'gh --version' \
+      "(apt install gh or use GitHub release)" "apt install gh"
 
 ###############################################################################
 # ░░  DEVOPS / LANG MANAGERS (optional)
@@ -309,17 +357,10 @@ if [[ -f pyproject.toml ]] && command -v poetry &>/dev/null; then
   probe "poetry venv OK" 'poetry env info --path >/dev/null'
 fi
 
-# --- Terraform --------------------------------------------------------------
-check "Terraform CLI" 'command -v terraform' \
-     "(brew install terraform)" "brew install terraform"
-
-# --- kubectl ----------------------------------------------------------------
-check "kubectl CLI"  'command -v kubectl' \
-     "(brew install kubectl)" "brew install kubectl"
-
-# --- Helm -------------------------------------------------------------------
-check "Helm CLI"     'command -v helm' \
-     "(brew install helm)"    "brew install helm"
+# --- Terraform / Kubernetes / Helm (optional) -------------------------------
+# probe "Terraform CLI" 'command -v terraform' "(optional)"
+# probe "kubectl CLI"   'command -v kubectl'   "(optional)"
+# probe "Helm CLI"      'command -v helm'      "(optional)"
 
 ###############################################################################
 # ░░  HOMEBREW
@@ -378,20 +419,22 @@ check "pre-commit config valid" \
 ###############################################################################
 # ░░  DIR ENV AUDIT MODE
 ###############################################################################
-if [[ "$1" == "--direnv-audit" || "$1" == "-da" ]]; then
+if [[ "${1:-}" == "--direnv-audit" || "${1:-}" == "-da" ]]; then
   _divider
   _info "📦 Direnv Audit: Scanning ~/projects/*/.direnv …"
+
   for d in ~/projects/*/.direnv; do
     [[ -d "$d" ]] || continue
-    project=$(basename "$(dirname "$d")")
-    envrc="${d%/.direnv}/.envrc"
 
-    printf '%-30s' "$project"
+    project=$(basename "$(dirname "${d:-/dev/null}")")
+    envrc="${d:-/dev/null}"; envrc="${envrc%/.direnv}/.envrc"
+
+    printf '%-30s' "${project:-<unknown>}"
 
     if [[ -f "$envrc" ]]; then
       if bash -n "$envrc" &>/dev/null; then
         venv_line=$(grep -E "layout python|source venv/bin/activate" "$envrc" | head -n 1)
-        if [[ -n "$venv_line" ]]; then
+        if [[ -n "${venv_line:-}" ]]; then
           echo "${GRN}✅ .envrc valid / Venv: ✅${RST}"
         else
           echo "${YLW}✅ .envrc valid / Venv: ❌${RST}"

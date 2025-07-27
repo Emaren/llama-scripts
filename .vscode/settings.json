@@ -1,0 +1,18 @@
+{
+    // 📂 Autocomplete when typing folder paths
+    "path-intellisense.autoSlashAfterDirectory": true,
+    "path-intellisense.extensionOnImport": true,
+  
+    // 🌿 DotENV file support
+    "files.associations": {
+      ".env*": "dotenv"
+    },
+  
+    // 🐍 Python path for autocomplete (direnv aware)
+    "python.pythonPath": "${workspaceFolder}/.direnv/python*/bin/python",
+    "python.analysis.extraPaths": ["./", "./bin"],
+  
+    // 🖥️ Terminal: bigger scrollback for longer logs
+    "terminal.integrated.scrollback": 5000
+  }
+  
