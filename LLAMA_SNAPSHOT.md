@@ -1,176 +1,209 @@
-🧩 LLAMA DEV SNAPSHOT — v2025-07-25
-📌 Recent Highlights
-✅ Clean venv rebuild (3.11.9)
+🧩 LLAMA DEV SNAPSHOT — v2025‑07‑26.4 (Part 1 of 4)
+💠 Unified Venv Infrastructure • Agent System Status • Memory & Streaming Layer
 
-✅ .envrc + pyenv auto-activation
+───────────────────────────────────────────────────────────────────────────────
+📌 LATEST HIGHLIGHTS
+───────────────────────────────────────────────────────────────────────────────
+✅ Python 3.13.5 venvs rebuilt using `.direnv/python-3.13` standard
+✅ `.envrc` auto-activation confirmed for `api-prodn`, `llama-scripts`, and all core projects
+✅ `fix-all-venvs.sh` fully patched to sync 3.13.x environments
+✅ `venv-status.sh` cronjob added to `cron.weekly` (logs to `/var/log/venv-audit.log`)
 
-✅ LLAMA_SNAPSHOT.md symlinked
+───────────────────────────────────────────────────────────────────────────────
+🧼 PRIOR IMPROVEMENTS
+───────────────────────────────────────────────────────────────────────────────
+🪚 Secrets scrubbed from Git via BFG
+🧪 Fixed hydration/streaming bug in React/Next.js dashboards
+🧠 `.envrc` + `sanity-venv-audit.sh` stable across MacBook & VPS environments
 
-🧼 GitHub secret cleanup
-
-🪟 Tile polling + Next.js metadata bug resolved
-
+───────────────────────────────────────────────────────────────────────────────
 ✅ STACK STATUS (LIVE)
-Layer	Port	Component	Tech / Status
-🎯 AoE2HD App	—	Frontend	Next.js ✅ (Flutter live)
-🎯 AoE2HD API	8003	Betting backend	FastAPI ✅
-🧠 Metrics API	8005	llama-api	FastAPI ✅
-🧩 Chat Agent API	8006	llama-chat-api	FastAPI ✅ (SSE patched)
-💬 Chat UI	3006	llama-chat-app	Next.js ✅ (streams OK)
-📊 Dashboard UI	3005	llama-dashboard	Next.js ✅ (metrics flow)
-🧠 Ollama LLM	—	LLaMA 3 8b Q4_K_M	✅ Local inference
-🎭 OpenAI Agent	—	Agent4oMP	✅ Prompt-Mgmt injected
+───────────────────────────────────────────────────────────────────────────────
+Layer             │ Port   │ Component         │ Tech / Status
+──────────────────┼────────┼───────────────────┼────────────────────────────────
+🎯 AoE2HD App     │ —      │ Frontend          │ Next.js ✅ (Flutter legacy live)
+🎯 AoE2HD API     │ 8003   │ Betting backend   │ FastAPI ✅
+🧠 Metrics API    │ 8005   │ llama-api         │ FastAPI ✅
+🧩 Chat Agent     │ 8006   │ llama-chat-api    │ FastAPI ✅ (SSE patched)
+💬 Chat UI        │ 3006   │ llama-chat-app    │ Next.js ✅ (Streaming works)
+📊 Dashboard UI   │ 3005   │ llama-dashboard   │ Next.js ✅ (Tiles confirmed)
+🧠 Ollama LLM     │ —      │ llama3:8b local   │ ✅ `q4_K_M` streaming, local inference
+🎭 OpenAI Agent   │ —      │ Agent4oMP         │ ✅ Bootloader injected, memory OK
 
-🧰 PM2 SERVICES SNAPSHOT
-Name	Port(s)	Tech
-token_tap_app	3007	Next.js
-token_tap_api	8007	FastAPI
-redline-legal-app	3004	Next.js
-redline-legal-api	8004	FastAPI
-explorer-prod	4173	Vite
-wolo-prod	26656/26657	Cosmos SDK
+───────────────────────────────────────────────────────────────────────────────
+🧰 PM2 SERVICE SNAPSHOT
+───────────────────────────────────────────────────────────────────────────────
+Name                │ Port(s)         │ Tech
+────────────────────┼─────────────────┼─────────────────────
+token_tap_app       │ 3007            │ Next.js
+token_tap_api       │ 8007            │ FastAPI
+redline-legal-app   │ 3004            │ Next.js
+redline-legal-api   │ 8004            │ FastAPI
+explorer-prod       │ 4173            │ Vite
+wolo-prod           │ 26656 / 26657   │ Cosmos SDK
 
-🧩 VENV INFRASTRUCTURE SNAPSHOT — v2025-07-25
-1️⃣ Legacy (Python 3.11.9)
-📁 Repo	🧪 Env Name	Python Ver	Env Type	Auto-activation
-llama-chat-api	api311	3.11.9	pyenv-virtualenv	layout pyenv ✅
-llama-chat-app	app311	3.11.9	pyenv-virtualenv	layout pyenv ✅
-llama-api	llamaapi311	3.11.9	pyenv-virtualenv	layout pyenv ✅
-llama-dashboard	dashboard311	3.11.9	pyenv-virtualenv	layout pyenv ✅
+───────────────────────────────────────────────────────────────────────────────
+🧩 VENV INFRASTRUCTURE SNAPSHOT — v2025‑07‑26.4
+───────────────────────────────────────────────────────────────────────────────
 
-2️⃣ Auto-bootstrapped via direnv-bootstrap-all.sh (Python 3.12.3)
-📁 Repo	🧪 Env Name
-aoe2hd-parsing	aoe2hdparsing312
-api-prod	apiprod312
-api-prodf	apiprodf312
-api-prodn	apiprodn312
-api-staging	apistaging312
-llama-api	llamaapi312
-llama-backend	llamabackend312
-llama-chat-api	llamachatapi312
-llama-chat-app	llamachatapp312
-llama	llama312
-token_tap_api	tokentapapi312
+1️⃣ PYENV-VIRTUALENV (Python 3.11.9) — legacy
+📁 Repo               │ Env Name        │ Type             │ Auto-activation
+─────────────────────┼─────────────────┼──────────────────┼─────────────────────
+llama-chat-api       │ api311          │ pyenv‑virtualenv │ layout pyenv ✅
+llama-chat-app       │ app311          │ pyenv‑virtualenv │ layout pyenv ✅
+llama-api            │ llamaapi311     │ pyenv‑virtualenv │ layout pyenv ✅
+llama-dashboard      │ dashboard311    │ pyenv‑virtualenv │ layout pyenv ✅
 
-3️⃣ Per-repo via direnv-bootstrap.sh (Python 3.13)
-📁 Repo	Venv Path
-llama-scripts	.direnv/python-3.13
-(symlinked helper)	for any project you cd into
+2️⃣ AUTO-BOOTSTRAPPED (Python 3.12.3) — via `direnv-bootstrap-all.sh`
+📁 Repo               │ Env Name
+─────────────────────┼─────────────────────
+aoe2hd-parsing       │ aoe2hdparsing312
+api-prod             │ apiprod312
+api-prodf            │ apiprodf312
+api-prodn            │ apiprodn312
+api-staging          │ apistaging312
+llama-api            │ llamaapi312
+llama-backend        │ llamabackend312
+llama-chat-api       │ llamachatapi312
+llama-chat-app       │ llamachatapp312
+llama                │ llama312
+token_tap_api        │ tokentapapi312
 
-🧠 Activated by: direnv (.envrc) + either .python-version or .direnv/python-<VER>
-🧩 Shims route to: ~/.pyenv/shims/python
+3️⃣ MODULAR DIR-LOCAL VIRTUALENVS (Python 3.13.x)
+📁 Repo               │ Venv Path
+─────────────────────┼────────────────────────────
+llama-scripts        │ .direnv/python-3.13
+api-prodn            │ .direnv/python-3.13
+(api-prod pending…)  │ (as you cd into them)
 
-🪝 SYMLINKS
-File	Linked In	Notes
-LLAMA_SNAPSHOT.md	llama-chat-api, llama-chat-app	✅ Global visibility
-direnv-bootstrap.sh	every project (via symlink)	✅ DRY propagation
-direnv-bootstrap-all.sh	top-level ~/projects	✅ Bulk bootstrap
+🧠 Activation Chain
+- direnv auto-triggers via `.envrc`
+- Python version controlled via `.python-version` or venv path
+- Resolved via `~/.pyenv/shims/python`
 
-🐚 INFRA & DEV HYGIENE
-✅ PM2 frontend: start-llama.sh
+───────────────────────────────────────────────────────────────────────────────
+🪝 SYMLINKS (DRY Propagation Across Repos)
+───────────────────────────────────────────────────────────────────────────────
+File Name              │ Linked In                │ Notes
+───────────────────────┼──────────────────────────┼────────────────────────────
+LLAMA_SNAPSHOT.md      │ llama-chat-*, others     │ Global visibility of stack
+direnv-bootstrap.sh    │ all projects             │ Standardized venv creation
+direnv-bootstrap-all.sh│ ~/projects top-level     │ Bulk init/fix automation
 
-✅ PM2 backend: venv/bin/python -m uvicorn …
 
-✅ Auto-activation: .envrc + pyenv local 3.11.9
+───────────────────────────────────────────────────────────────────────────────
+🐚 INFRA & DEV HYGIENE — CROSS-PLATFORM STATUS
+───────────────────────────────────────────────────────────────────────────────
 
-✅ Python: clean 3.11.9 build
+Feature                         │ Status   │ Notes
+────────────────────────────────┼──────────┼──────────────────────────────────────
+PM2 (frontend)                  │ ✅       │ Next.js apps autoload with venvs
+PM2 (backend)                   │ ✅       │ FastAPI + Uvicorn mapped via venv/bin/python
+.envrc auto-activation          │ ✅       │ Every repo activates cleanly
+Python 3.13.5 build (Mac)       │ ✅       │ Custom Boost flags, pip rebuilt cleanly
+Python 3.12.3 build (VPS)       │ ✅       │ Reproducible clean envs across stack
+Aliases fix                     │ ✅       │ `unalias python` + `exec zsh` resolves pyenv shims
+Git hygiene                     │ ✅       │ Ignores: `venv/`, `.env`, `.idea/`, `__pycache__`
+Helper scripts (symlinked)      │ ✅       │ `~/projects/llama-scripts/bin/*` linked across repos
 
-✅ Alias fix: unalias python && exec zsh
+───────────────────────────────────────────────────────────────────────────────
+🧪 LAUNCH & MAINTENANCE SCRIPTS
+───────────────────────────────────────────────────────────────────────────────
 
-✅ Git hygiene: ignores venv/, .env, .idea/, .pyc
+Script Name             │ Status   │ Notes
+────────────────────────┼──────────┼────────────────────────────────────────────
+start-chatdev.sh        │ ✅       │ tmux, venv, autoports all working
+start-dashdev.sh        │ 🔜       │ prepped; will mirror chatdev
+fix-all-venvs.sh        │ ✅       │ regenerates, syncs, re-freezes, logs
+sanity-venv-audit.sh    │ ✅       │ VPS-compatible; logs missing to /tmp/venv-missing-*
 
-✅ iOS testing via *.ngrok-free.app
+───────────────────────────────────────────────────────────────────────────────
+🔌 CHAT SYSTEM — FRONTEND STREAMING ARCHITECTURE
+───────────────────────────────────────────────────────────────────────────────
 
-🧪 LAUNCH SCRIPTS
-Script	Status	Notes
-start-chatdev.sh	✅	Tmux, clean venv start, envs autoload
-start-dashdev.sh	🔜	Align structure & hygiene
+Framework:     React 19.1 + Next.js 15.3.4 + TailwindCSS
+SSE Stream:    ✅ `streamChat()` → FastAPI `StreamingResponse` → DOM
+Markdown:      ✅ `ReactMarkdown`
+Agent memory:  ✅ local JSON w/ injectors
+SSR fixes:     ✅ hydration bugs patched (_app.tsx wrapped)
 
-🔌 CHAT SYSTEM
-Framework: React 19.1 + Next.js 15.3.4 + Tailwind ✅
+🔑 Key Routes:
+POST   /api/chat/send
+GET    /chat/messages/{agent}
+GET    /api/chat/agents
+GET    /api/chat/responses
 
-Markdown: via ReactMarkdown ✅
+───────────────────────────────────────────────────────────────────────────────
+📊 DASHBOARD SYSTEM — LLAMA VISUAL METRICS LAYER
+───────────────────────────────────────────────────────────────────────────────
 
-Streaming: streamChat() ✅
+Frontend: llama-dashboard (Next.js 15.3.4) → port 3005  
+Backend:  llama-api (FastAPI) → port 8005
 
-Key Routes: /api/chat/send, /chat/messages/{agent}, /responses ✅
+Endpoints:
+  • /stats/tokens
+  • /system-vitals
+  • /agents/health
 
-📊 DASHBOARD SYSTEM
-Frontend: Next.js 15.3.4 @ :3005
+Auto-refresh: ✅ `refetchInterval` in place, works for live polling
 
-Backend: FastAPI @ :8005
+───────────────────────────────────────────────────────────────────────────────
+🧠 OLLAMA LLM — LOCAL INFERENCE + MEMORY SYSTEM
+───────────────────────────────────────────────────────────────────────────────
 
-Live Endpoints: /stats/tokens, /system-vitals, /agents/health
+🧠 Model Inference Layer
+────────────────────────
+Model used:            ✅ llama3:8b-instruct-q4_K_M
+Streaming response:    ✅ FastAPI `StreamingResponse` → frontend DOM
+Container settings:    ✅ keep_alive: false (prevents container stall)
+Persona preprompt:     ✅ Injected into initial messages per agent
+System prompt cap:     ✅ ~12K char cap enforced on history
 
-Auto-refresh: In progress
+🧠 Memory Subsystem
+────────────────────
+Format:                ✅ JSON files under `./memory/{agent}.json`
+Memory injection:      ✅ Chat memory injected into prompts
+Scoped filters:        🟡 In prototype (inline token filtering)
+FAISS embeddings:      🟡 Scaffolding added; vector search pending
+GPT summarization:     🟡 First-pass chunker in development
+Pruning logic:         🔜 To be added (heuristic overflow guards)
+Manual validation:     ✅ All agents pass memory load/parse
 
-🧠 OLLAMA LLM (LOCAL)
-Model: llama3:8b-instruct-q4_K_M
+───────────────────────────────────────────────────────────────────────────────
+🧬 MEMORY ROADMAP — Q3 2025
+───────────────────────────────────────────────────────────────────────────────
 
-✅ Persona injection + streaming
+• Scoped tagging + replay filters per agent
+• Vector embedding via `vector_memory.py` → FAISS search
+• Memory pruning via size/recency heuristics
+• GPT summaries + rollups for long sessions
+• Memory mutation audit trail + drift detection
+• Injector system: LLAMA_SNAPSHOT.md auto-pins context
+• Snapshots track divergence between memory vs runtime
 
-✅ Memory: ./memory/{agent}.json (12K cap)
+───────────────────────────────────────────────────────────────────────────────
+📱 MOBILE + NGROK ACCESS
+───────────────────────────────────────────────────────────────────────────────
 
-⚠️ keep_alive: false patch to avoid stale containers
+iOS Safari support:      ❌ Blocked due to localhost/CORS
+ngrok proxy:             ✅ Use `NEXT_PUBLIC_API_BASE=https://<ngrok-sub>.ngrok-free.app`
+Streaming via ngrok:     ✅ Confirmed working for `/send` route
 
-⚠️ BUG FIXES
-Issue	Resolution
-❌ Stream reply invisible	logRef[idx] = {…} + flushSync()
-❌ Token tile stale	refetchInterval + invalidate()
-❌ SSE fallback	<prompt:…> + client.responses
+───────────────────────────────────────────────────────────────────────────────
+🧩 FINAL CONTEXT LOCK
+───────────────────────────────────────────────────────────────────────────────
 
-🧱 NEXT.JS & ENV FIXES
-✅ .env secrets removed & rotated (via BFG)
+Snapshot ID:     🧩 LLAMA DEV SNAPSHOT — v2025‑07‑26.1  
+Synced Agents:   ✅ Agent4oMP (OpenAI) + all Ollama agents
+Live Stack:      ✅ All PM2 services mapped to venvs  
+Platform:        ✅ Mac (local) + VPS (Hetzner)  
 
-✅ Hydration: wrapped in <ClientProviders>
+───────────────────────────────────────────────────────────────────────────────
+📋 SANITY / LOGGING / CLI TOOLS — Root-Safe Compatibility
+───────────────────────────────────────────────────────────────────────────────
 
-🧠 MEMORY SYSTEM STATUS
-Feature	Status	Notes
-Persistent JSON	✅	Per-agent memory
-GPT Pre-injection	✅	Injected at start
-Tagging	🟡	Inline scoped tags
-FAISS search	🟡	Scaffolded
-Scoped filters	🟡	Token-fit filtering
-GPT summaries	🟡	Auto-chunking in dev
-Pruning	🔜	Next pass
-Manual validation	✅	All agents validated
-
-🔬 MEMORY ROADMAP — Q3 2025
-🔖 Tagging + 🧠 Embeddings
-
-📁 Scoped filters
-
-💬 GPT summaries
-
-🧹 Pruning
-
-🧬 Mutation / Replay
-
-📂 Next: vector_memory.py
-
-🐚 VENV STATUS
-Project	Activated Via
-llama-chat-api	✅ source venv/bin/activate
-llama-chat-app	✅ .envrc + direnv
-llama-dashboard	✅ .envrc + direnv
-llama-api	✅ .envrc + direnv
-
-📋 FEATURE SNAPSHOT
-✅ SSE backend
-
-✅ Markdown rendering
-
-✅ Agent-based memory
-
-✅ Stream isolation per agent
-
-⚠️ Prompt-Mgmt SSE fix pending
-
-🔄 Token tile auto-refresh pending
-
-📱 MOBILE / NGROK
-❌ iOS Safari fails on localhost
-
-✅ Use:
-
-NEXT_PUBLIC_API_BASE=https://<your-subdomain>.ngrok-free.app
+sanity script path:         ✅ `/var/www/llama-scripts/bin/sanity`
+Root execution:             ✅ Works with `.direnv` + `python-3.13.0`
+Stream display:             ✅ `watch -n 5 sanity` confirmed working in tmux
+Live logs:                  ✅ Sed transforms `\r` → `\r\n` for terminal display
+Tool inspection:            ✅ `wc -l`, `sed -n`, `less -R` used for CLI insight
