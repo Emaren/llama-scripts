@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 
-import os, subprocess, socket
-from collections import defaultdict
+import subprocess
+import os
+import socket
 
+IS_VPS = socket.gethostname() == "wolo"
+REMOTE = "wolo"
 USER_PREFIX = "/Users/tonyblum"
 PROJECTS_PATH = os.path.join(USER_PREFIX, "projects")
-IS_VPS = socket.gethostname() == "wolo"
 
+# Filtered list (exclude 'other' and 'side')
 ALL_PROJECTS = [
     "aoe2hd-frontend", "api-staging", "app-staging", "llama-api", "llama-scripts", "token_tap_app",
     "aoe2hd-parsing", "explorer-backup", "llama-backend", "wolo-backup",
     "api-backup", "app-backup", "explorer-prod", "llama-chat-api", "redline_legal_api", "wolo-prod",
     "api-prod", "app-prod", "explorer-staging", "llama-chat-app", "redline_legal_app", "wolo-staging",
-    "api-prodf", "app_prodf", "explorerdev", "llama-dashboard", "wolochain",
+    "api-prodf", "app-prodf", "explorerdev", "llama-dashboard", "wolochain",
     "api-prodn", "app-prodn", "llama", "llama-frontend", "token_tap_api", "wolodev"
 ]
 
@@ -26,9 +29,8 @@ def check_status(repo_path):
         return f"{display_path(repo_path)} 🚫 Not a git repo"
     try:
         os.chdir(repo_path)
-        branch = subprocess.check_output(["git", "branch", "--show-current"], text=True).strip()
+        branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], text=True).strip()
         status = subprocess.check_output(["git", "status", "--short"], text=True).strip()
-        dirty = bool(status)
         try:
             remote_diff = subprocess.check_output(
                 ["git", "rev-list", "--left-right", "--count", f"{branch}...origin/{branch}"],
@@ -37,37 +39,21 @@ def check_status(repo_path):
             ).strip()
             ahead, behind = map(int, remote_diff.split())
         except subprocess.CalledProcessError:
-            return f"{display_path(repo_path)} [{branch}] ❌ Unable to compare with origin"
-        summary = f"Ahead: {ahead}, Behind: {behind}, Dirty: {'Yes' if dirty else 'No'}"
-        icon = "✅" if ahead == 0 and behind == 0 and not dirty else "🟡"
-        return f"{display_path(repo_path)} [{branch}] {icon} {summary}"
+            ahead, behind = "?", "?"
+        dirty = "Yes" if status else "No"
+        return f"{display_path(repo_path)} [{branch}] ✅ Ahead: {ahead}, Behind: {behind}, Dirty: {dirty}"
     except Exception as e:
         return f"{display_path(repo_path)} ❌ Error: {e}"
 
-def group_and_sort_paths(path_list):
-    custom_groups = {
-        "redline_legal_api": "redline",
-        "redline_legal_app": "redline",
-        "token_tap_api": "tokentap",
-        "token_tap_app": "tokentap",
-    }
-    grouped = defaultdict(list)
-    for path in path_list:
-        name = os.path.basename(path)
-        group = custom_groups.get(name, name.split("-")[0])
-        grouped[group].append((name, path))
-    return dict(sorted(grouped.items()))
-
 def main():
-    print(f"\n🔍 {'VPS' if IS_VPS else 'LOCAL'} REPOS")
-    base_path = "/var/www" if IS_VPS else PROJECTS_PATH
-    all_paths = [os.path.join(base_path, name) for name in ALL_PROJECTS]
-
-    grouped = group_and_sort_paths(all_paths)
-    for group, paths in grouped.items():
-        print(f"\n📁 Group: {group}")
-        for _, path in sorted(paths):
-            print(" •", check_status(path))
+    if IS_VPS:
+        print(f"\n🔍 VPS REPOS")
+        for name in ALL_PROJECTS:
+            print(" •", check_status(f"/var/www/{name}"))
+    else:
+        print(f"\n🔍 LOCAL REPOS")
+        for name in ALL_PROJECTS:
+            print(" •", check_status(os.path.join(PROJECTS_PATH, name)))
 
 if __name__ == "__main__":
     main()
