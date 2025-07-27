@@ -6,11 +6,19 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECTS_DIR="$HOME/projects"
 LOG="$SCRIPT_DIR/venv-missing.log"
 REPAIRED="$SCRIPT_DIR/repaired-venvs.log"
+PYSHORT="3.13"
+PYTHON_BIN="$(command -v python${PYSHORT} || true)"
 UPDATE_AFTER=false
 DRY_RUN=false
 
 echo "🔧 LOG = $LOG"
 echo "🔧 PWD = $(pwd)"
+
+# ─── CHECK PYTHON ──────────────────────────────────────────────────────────────
+if [[ -z "$PYTHON_BIN" ]]; then
+  echo "❌ Python $PYSHORT not found. Try: brew install python@$PYSHORT"
+  exit 1
+fi
 
 # ─── PARSE ARGS ────────────────────────────────────────────────────────────────
 for arg in "$@"; do
@@ -35,27 +43,21 @@ fi
 # ─── MAIN REPAIR LOOP ──────────────────────────────────────────────────────────
 while read -r dir; do
   [[ -z "$dir" ]] && continue
-
   echo "📦 Repairing venv for: $dir"
-  cd "$PROJECTS_DIR/$dir"
-  venv_name="${dir//-/_}3.12"
 
-  if $DRY_RUN; then
-    echo "🔍 DRY RUN: Would create pyenv virtualenv 3.12.3 $venv_name"
-    echo "🔍 DRY RUN: Would write .python-version = $venv_name"
+  TARGET="$PROJECTS_DIR/$dir"
+  cd "$TARGET"
+
+  VENV_DIR=".direnv/python-$PYSHORT"
+
+  if [[ $DRY_RUN == true ]]; then
+    echo "🔍 DRY RUN: Would create $VENV_DIR"
     continue
   fi
 
-  pyenv virtualenv 3.12.3 "$venv_name" || echo "⚠️  Already exists: $venv_name"
-
-  if [[ -f .python-version ]]; then
-    current_version=$(<.python-version)
-    if [[ "$current_version" != "$venv_name" ]]; then
-      echo "⚠️  Mismatch: .python-version in $dir is '$current_version' but should be '$venv_name'"
-    fi
-  else
-    echo "$venv_name" > .python-version
-    echo "📝 Wrote .python-version for $dir"
+  if [[ ! -d "$VENV_DIR" ]]; then
+    echo "🐍 Creating venv in $VENV_DIR"
+    "$PYTHON_BIN" -m venv "$VENV_DIR"
   fi
 
   echo "$dir" >> "$REPAIRED"
