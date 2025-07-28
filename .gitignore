@@ -1,6 +1,6 @@
-
 # direnv
 .envrc
 .direnv/
 .python-version
 venv-freeze-*.log
+venv-logs/

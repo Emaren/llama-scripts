@@ -9,7 +9,7 @@ START=$(date +%s)
 
 PROJECT_DIR="${1:-$(pwd)}"
 REBUILD="${2:-}"
-PYTHON_VERSION="3.13"
+PYTHON_VERSION="3.13.5"
 PYTHON_FULL_VERSION="3.13.5"
 VENV_DIR=".direnv/python-$PYTHON_VERSION"
 LOGFILE="$HOME/.venv-bootstrap.log"
