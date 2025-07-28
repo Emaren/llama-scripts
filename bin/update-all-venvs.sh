@@ -53,17 +53,17 @@ for dir in */; do
   echo "⚙️  Bootstrapping $repo with Python $PYTHON_VERSION"
   bash "$BOOTSTRAP_ONE" "$path"
   direnv allow
-  
+
   # Correcting path to pip under the Python 3.13 environment
-  if [[ -x ".direnv/python-3.13/bin/pip" ]]; then
-    .direnv/python-3.13/bin/pip install --upgrade pip
+  if [[ -x ".direnv/python-${PYTHON_VERSION}/bin/pip" ]]; then
+    .direnv/python-${PYTHON_VERSION}/bin/pip install --upgrade pip
   else
-    echo "❌ pip not found in .direnv/python-3.13/bin. Skipping pip upgrade."
+    echo "❌ pip not found in .direnv/python-${PYTHON_VERSION}/bin. Skipping pip upgrade."
   fi
 
   # Save freeze log in the venv-logs folder with timestamp
   FREEZE_LOG="$LOG_DIR/venv-freeze-$(date +'%Y%m%d-%H%M').log"
-  .direnv/python-3.13/bin/pip freeze > "$FREEZE_LOG"
+  .direnv/python-${PYTHON_VERSION}/bin/pip freeze > "$FREEZE_LOG"
   echo "📦 Saved freeze log: $FREEZE_LOG"
 done
 
