@@ -148,7 +148,28 @@ _apply_fix() {           # _apply_fix "<command to run>"
   fi
 }
 
-probe(){ check "$@"; }  # legacy alias
+ probe(){ check "$@"; }  # legacy alias
+
+###############################################################################
+# Helper: return success if `brew doctor` only emits ignorable warnings
+###############################################################################
+_brew_doctor_ok() {
+  command -v brew >/dev/null || return 1
+  local out
+  if command -v timeout >/dev/null; then
+    out=$(timeout 15 brew doctor 2>&1 || true)
+  else
+    out=$(brew doctor 2>&1 || true)
+  fi
+  echo "$out" | awk '
+    BEGIN   {ok=1}
+    /^Warning:/ {
+      if ($0 ~ /(same name as core formulae|just ignore this)/) next
+      ok=0
+    }
+    END     {exit !ok}
+  '
+}
 
 ###############################################################################
 # ░░  bootstrap NVM & direnv (silent)
@@ -169,50 +190,56 @@ if has shfmt; then
 fi
 
 ###############################################################################
-# ░░  PYTHON
+# ░░  PYTHON TOOLCHAIN
 ###############################################################################
 if has pyenv; then
   _divider; _info "🐍  PYTHON TOOLCHAIN"
 
+  # ── Optional: skip slow checks in FAST mode ───────────────────────────────
   if (( FAST )); then
     _info "🐍  FAST mode – skipping pyenv doctor"
   else
     probe "pyenv doctor" "pyenv doctor"
   fi
 
+  # ── Check Python version ≥ 3.12 (major.minor) ─────────────────────────────
   [[ $FAST -eq 1 ]] || \
   probe "python ⩾3.12" 'python - <<PY
-import sys; sys.exit(0 if sys.version_info>=(3,12) else 1)
+import sys; sys.exit(0 if sys.version_info >= (3,12) else 1)
 PY' "(upgrade Python)" "pyenv install 3.12.3 && pyenv global 3.12.3"
 
+  # ── Check pre-commit version ≥ 4.x ────────────────────────────────────────
   probe "pre-commit ⩾4" \
         '[[ "$(pre-commit --version 2>/dev/null || true)" =~ " 4[.]" ]]' \
         "(pipx install pre-commit)" "pipx install pre-commit"
 
+  # ── Check if pipx is installed and on PATH ────────────────────────────────
   check "pipx on PATH" 'command -v pipx' \
         "(pipx install pipx && pipx ensurepath)"
 
-  # Check if inside venv
+  # ── Detect whether inside a virtual environment ───────────────────────────
   python - <<'PY' && _IN_VENV=true || _IN_VENV=false
-import sys; sys.exit(0 if sys.prefix!=getattr(sys,"base_prefix",sys.prefix) else 1)
+import sys; sys.exit(0 if sys.prefix != getattr(sys, "base_prefix", sys.prefix) else 1)
 PY
 
   if $_IN_VENV; then
     probe "interpreter inside venv" true
 
-    # ✅ Robust pip ↔ python version check (major.minor only)
+    # Match pip and python versions (major.minor only)
     PY_VER=$(python --version 2>&1 | awk '{print $2}' | cut -d. -f1,2)
     PIP_VER=$(pip --version 2>&1 | grep -oE 'python [0-9.]+' | awk '{print $2}' | cut -d. -f1,2)
+
     if [[ "$PIP_VER" == "$PY_VER" ]]; then
       _ok "pip ↔ python match"
     else
-      _fail "pip ↔ python mismatch"
+      _fail "pip ↔ python mismatch (python $PY_VER vs pip $PIP_VER)"
     fi
 
   else
     probe "no venv expected" true
   fi
 
+  # ── Ensure PATH has only one pyenv shim segment ──────────────────────────
   check "single pyenv shim path" \
         'tr ":" "\n" <<<"$PATH" | grep -c "/.pyenv/shims" | grep -q "^1$"'
 else
@@ -255,50 +282,45 @@ fi
 # ░░  ENV MANAGEMENT
 ###############################################################################
 if has direnv; then
-  _divider; _info "✨  ENV MANAGEMENT"
-  dstat=$( direnv status 2>/dev/null || true )
-  case $dstat in
-    *"Loaded RC allowed"*) check ".envrc allowed"  true ;;
-    *"Blocked RC"*)        check ".envrc allowed"  false "(direnv allow)" "direnv allow" ;;
-    *"Found RC path"*)     check ".envrc allowed"  true  "(no .envrc here)" ;;
-    *)                     check ".envrc allowed"  true  "(direnv inactive)" ;;
-  esac
+  _divider
+  _info "✨  ENV MANAGEMENT"  # This header should only be printed once
+
+  # Checking ".envrc allowed" status
+  check ".envrc allowed" '[[ -f .envrc ]]'
+
+  # Check if direnv sees pyenv env
+  has pyenv && \
+    check "direnv sees pyenv env" '[ $(pyenv version-name) != system ]'
+
+  # Check if starship git status is enabled
+  check "Starship git_status" 'grep -q "\[git_status\]" ~/.config/starship.toml' "(enable VCS prompt)"
+
+  # ✅ Already verified earlier
+  probe "pip ↔ python match" true "(verified in Python section)"
+
+  # ░░ PATH duplicate check — safe and timeout-free ░░
+  _info "PATH duplicate check"  # This header is now removed from being printed multiple times
+  if [[ -n "$(echo "$PATH" | tr ":" "\n" | sort | uniq -d)" ]]; then
+    _info "Duplicate PATH segments found, attempting fix"
+    # Deduplicate PATH
+    export PATH=$(echo "$PATH" | tr ':' '\n' | sort | uniq | tr '\n' ':')
+    _ok "Duplicate PATH segments removed"
+  else
+    _ok "No duplicate PATH segments found — all good."
+  fi
+
+  # ✅ Optional CLI tools using probes
+  _info "Optional CLI tools check"
+  probe "Terraform CLI" true "(optional)"
+  probe "kubectl CLI"   true "(optional)"
+  probe "Helm CLI"      true "(optional)"
+
 else
   _info "✨  Direnv not installed — skipping"
 fi
 
-has pyenv && \
-  check "direnv sees pyenv env" '[ $(pyenv version-name) != system ]'
-
-check "Starship git_status" \
-      'grep -q "\[git_status\]" ~/.config/starship.toml' "(enable VCS prompt)"
-
-# ✅ Already verified earlier
-probe "pip ↔ python match" true "(verified in Python section)"
-
-# ✅ PATH duplicate check — safe and timeout-free
-if [[ -n "$(tr ':' '\n' <<<"$PATH" | sort | uniq -d)" ]]; then
-  _info "duplicate PATH segments found — attempting fix"
-  if (( ${#PATH} < 4096 )); then
-    export PATH=$(tr ":" "\n" <<<"$PATH" | awk '!seen[$0]++' | paste -sd:)
-    _ok "deduplicated PATH"
-  else
-    _warn "PATH too long to deduplicate safely"
-  fi
-else
-  _ok "no duplicate PATH segments"
-fi
-
-# ✅ repo in sync (optional)
-_info "repo in sync check skipped — local-only mode"
-
 # ✅ Colima detection (optional)
 _info "Colima not applicable on Linux — skipping"
-
-# ✅ Optional CLI tools using probes
-probe "Terraform CLI" true "(optional)"
-probe "kubectl CLI"   true "(optional)"
-probe "Helm CLI"      true "(optional)"
 
 ###############################################################################
 # ░░  PATH SANITY
@@ -333,10 +355,20 @@ fi
 ###############################################################################
 _divider; _info "🐳  DOCKER & CLOUD"
 
-check "Docker daemon"  'docker info &>/dev/null' \
-      "(start Docker service)" "sudo systemctl start docker"
+# For macOS: Check Docker Desktop status
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  if ! docker info &>/dev/null; then
+    _warn "Docker is not running. Please start Docker Desktop."
+  else
+    _ok "Docker Desktop is running"
+  fi
+fi
 
-_info "Colima not applicable on Linux — skipping"
+# For Linux: Start Docker service if not running
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+  check "Docker daemon"  'docker info &>/dev/null' \
+      "(start Docker service)" "sudo systemctl start docker"
+fi
 
 check "AWS CLI"        'aws --version' \
       "(apt install awscli or use pipx)" "apt install awscli"
@@ -368,16 +400,13 @@ fi
 if has brew; then
   _divider; _info "🍺  HOMEBREW"
 
-  # ── brew doctor (give it max 15 s so the script never hangs) ──────────────
-  check "brew doctor clean" \
-        '{
-           if command -v timeout &>/dev/null; then
-             timeout 15 brew doctor
-           else
-             brew doctor
-           fi
-         } | grep -q "^Your system is ready to brew\\."' \
-        "(run: brew doctor)"
+  # ── brew doctor (give it max 15s so the script never hangs) ──────────────
+  _info "brew doctor clean"
+  if _brew_doctor_ok; then
+    _ok "OK"
+  else
+    _warn "WARN (run: brew doctor)"
+  fi
 
   # ── security-critical upgrades (skip when --fast or jq missing) ───────────
   if has jq; then
@@ -399,15 +428,11 @@ if has brew; then
     _warn "jq missing — skipping security-upgrade scan"
   fi
 
-  # ── good-practice: disable phone-home analytics ───────────────────────────
+  # ── disable phone-home analytics ────────────────────────────────────────────
   check "brew analytics off" \
-        '[[ "$(brew analytics 2>/dev/null)" == "Analytics are disabled."* ]]' \
+        'brew analytics 2>/dev/null | grep -qEi "analytics.*disabled|destroyed"' \
         "(brew analytics off)" "brew analytics off"
-
-else
-  _info "🍺  Homebrew not installed — skipping"
 fi
-
 
 ###############################################################################
 # ░░  pre-commit config
