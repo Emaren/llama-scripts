@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
+# repair-missing-venvs.sh — Regenerate missing venvs from latest venv-missing log
+# 🧠 Uses .direnv/<project>313 layout and logs repaired entries
+
 set -euo pipefail
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG="$(ls -t /tmp/venv-missing-*.log 2>/dev/null | head -n1 || true)"
 REPAIRED="$SCRIPT_DIR/repaired-venvs.log"
-PYSHORT="3.13"
-PYTHON_BIN="$(command -v python${PYSHORT} || true)"
+PYVER="3.13.5"
+PYTHON_BIN="$(pyenv root)/versions/3.13.5/bin/python3"
 UPDATE_AFTER=false
 DRY_RUN=false
 
@@ -44,14 +47,16 @@ if [[ ! -f "$LOG" ]]; then
 fi
 
 if [[ ! -s "$LOG" ]]; then
-  echo "⚠️  venv-missing.log exists but is empty. Nothing to do."
+  echo "⚠️  $LOG exists but is empty. Nothing to do."
   exit 0
 fi
+
+echo "📄 Reading missing entries from: $LOG"
 
 # ─── MAIN REPAIR LOOP ──────────────────────────────────────────────────────────
 while read -r dir; do
   [[ -z "$dir" ]] && continue
-  echo "📦 Repairing venv for: $dir"
+  echo -e "\n📦 Repairing venv for: $dir"
 
   TARGET="$PROJECTS_DIR/$dir"
   if [[ ! -d "$TARGET" ]]; then
@@ -60,28 +65,37 @@ while read -r dir; do
   fi
   cd "$TARGET"
 
-  VENV_DIR=".direnv/python-3.13.5"
-
+  VENV_PATH=".direnv/${dir}${PYSHORT}"
   if [[ $DRY_RUN == true ]]; then
-    echo "🔍 DRY RUN: Would create $VENV_DIR"
+    echo "🔍 DRY RUN: Would create $VENV_PATH"
     continue
   fi
 
-  if [[ ! -d "$VENV_DIR" ]]; then
-    echo "🐍 Creating venv in $VENV_DIR"
-    "$PYTHON_BIN" -m venv "$VENV_DIR"
+  if [[ ! -d "$VENV_PATH" ]]; then
+    echo "🐍 Creating venv in $VENV_PATH"
+    "$PYTHON_BIN" -m venv "$VENV_PATH"
+  else
+    echo "✅ Already exists: $VENV_PATH"
+  fi
+
+  # Pin to layout python <named> in .envrc if missing
+  if ! grep -q "$VENV_PATH" .envrc 2>/dev/null; then
+    echo "📎 Updating .envrc layout → $VENV_PATH"
+    echo "layout python $VENV_PATH" > .envrc
   fi
 
   echo "$dir" >> "$REPAIRED"
-  echo "✅ $dir done"
+  echo "✅ $dir repaired"
 done < "$LOG"
 
 # ─── RE-RUN DIRENV ALLOW ACROSS ALL PROJECTS ───────────────────────────────────
-echo "🔁 Rehydrating venvs by direnv allow…"
+echo -e "\n🔁 Rehydrating environments with direnv allow..."
 find "$PROJECTS_DIR" -maxdepth 2 -name .envrc -execdir bash -c 'echo "🌱 Allowing: $(pwd)" && direnv allow' \;
 
 # ─── OPTIONAL UPDATE ───────────────────────────────────────────────────────────
 if $UPDATE_AFTER && ! $DRY_RUN; then
-  echo "🔁 Running full update after repair..."
+  echo -e "\n🔁 Running full update-all-venvs.sh after repair..."
   "$SCRIPT_DIR/update-all-venvs.sh"
 fi
+
+echo -e "\n🎯 \033[1;32mAll missing venvs repaired.\033[0m"

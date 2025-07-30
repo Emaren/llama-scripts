@@ -1,18 +1,11 @@
 #!/usr/bin/env bash
-# ──────────────────────────────────────────────────────────────────────────────
-# 🧪 direnv-audit.sh — Audit all Python projects in ~/projects or custom dir
-# Checks:
-#   1. .envrc file exists
-#   2. .envrc contains layout/source/VIRTUAL_ENV reference
-#   3. .direnv/venv exists and is executable
-# Also:
-#   - Prints aligned results table with emoji status
-#   - Lists 10 largest .direnv folders
-#   - Logs ❌ summary if any problems found (but does NOT exit 1)
-#   - Auto-detects Python version (3.11, 3.13, etc.)
+# 🧪 direnv-audit.sh — Audit all Python projects and their venv setup under ~/projects or /var/www
 # ──────────────────────────────────────────────────────────────────────────────
 
-if [[ "$(hostname)" == "wolo" ]]; then
+set -euo pipefail
+shopt -s nullglob
+
+if [[ "$(hostname)" == "wolo" || -d /var/www ]]; then
   ROOT="${1:-/var/www}"
 else
   ROOT="${1:-$HOME/projects}"
@@ -21,9 +14,9 @@ fi
 declare -a size_report
 bad_count=0
 
-# Ensure direnv exists
+# ─── Check dependencies ───
 if ! command -v direnv >/dev/null 2>&1; then
-  echo "❌ Error: direnv is not installed or not in PATH"
+  echo "❌ Error: direnv not found in PATH"
   exit 1
 fi
 
@@ -38,25 +31,29 @@ printf "%-25s  %-8s  %-10s  %-10s  %-6s\n" "------------------------" "--------"
 
 for dir in "$ROOT"/*/; do
   [[ -d "$dir" ]] || continue
+  name=$(basename "$dir")
   cd "$dir" || continue
 
-  name=$(basename "$dir")
   envrc="$dir.envrc"
-
-  # Find first matching .direnv/python-* folder
-  dvenv=$(find "$dir/.direnv" -maxdepth 1 -type d -name "python-3.*" 2>/dev/null | head -n1)
-
   has_envrc="❌"
   is_valid="❌"
   has_venv="❌"
   size="—"
 
+  # ─── Check .envrc existence ───
   [[ -f "$envrc" ]] && has_envrc="✅"
-  grep -qE "(VIRTUAL_ENV=|layout python|source venv/bin/activate)" "$envrc" 2>/dev/null && is_valid="✅"
 
-  if [[ -n "$dvenv" && -x "$dvenv/bin/python" ]]; then
+  # ─── Check .envrc contents ───
+  if grep -qE "(layout python|source .*/activate|VIRTUAL_ENV=)" "$envrc" 2>/dev/null; then
+    is_valid="✅"
+  fi
+
+  # ─── Detect .direnv/* venv folder ───
+  venv_dir=$(find "$dir/.direnv" -maxdepth 1 -type d \( -name "${name}313" -o -name "python-3.*" \) 2>/dev/null | head -n1)
+
+  if [[ -n "$venv_dir" && -x "$venv_dir/bin/python" ]]; then
     has_venv="✅"
-    size=$(du -sh "$dvenv" 2>/dev/null | cut -f1)
+    size=$(du -sh "$venv_dir" 2>/dev/null | cut -f1)
     size_report+=("$size|$name")
   fi
 

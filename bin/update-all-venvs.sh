@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
+# update-all-venvs.sh — Re-bootstrap all Python venvs with per-project naming
+# 🐍 Uses Python 3.13.5 via pyenv and logs to venv-logs/venv-freeze-<timestamp>-<project>.log
+
 set -euo pipefail
 
 # ─── CONFIG ─────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOSTNAME_FQDN="$(hostname -f 2>/dev/null || hostname)"
-PYTHON_VERSION="3.13.5"  # Harmonizing to 3.13.5 for all projects
+PYTHON_VERSION="3.13.5"
+PYSHORT="313"
 
-# Dynamic project root resolution
 if [[ "$HOSTNAME_FQDN" == *"wolo"* || -d /var/www ]]; then
   PROJECT_ROOT="/var/www"
 else
@@ -14,20 +17,23 @@ else
 fi
 
 BOOTSTRAP_ONE="$SCRIPT_DIR/direnv-bootstrap.sh"
-BOOTSTRAP_ALL="$SCRIPT_DIR/direnv-bootstrap-all.sh"
 REPAIR_SCRIPT="$SCRIPT_DIR/repair-missing-venvs.sh"
 MISSING_LOG="$SCRIPT_DIR/venv-missing.log"
+LOG_DIR="$PROJECT_ROOT/venv-logs"
+
+mkdir -p "$LOG_DIR"
 
 # ─── SAFETY: Deactivate active venv if present ─────────────────────────
 if [[ -n "${VIRTUAL_ENV:-}" ]]; then
   deactivate 2>/dev/null || unset VIRTUAL_ENV
 fi
 
-# ─── Ensure Python 3.13.5 is installed via pyenv ────────────────────────
+# ─── Ensure Python 3.13.5 is installed via pyenv ───────────────────────
 if ! pyenv versions --bare | grep -qx "$PYTHON_VERSION"; then
   echo "📥 Installing Python $PYTHON_VERSION via pyenv..."
   pyenv install "$PYTHON_VERSION"
 fi
+pyenv global "$PYTHON_VERSION"
 
 # ─── AUTO-REPAIR IF MISSING ────────────────────────────────────────────
 if [[ -s "$MISSING_LOG" ]]; then
@@ -35,11 +41,7 @@ if [[ -s "$MISSING_LOG" ]]; then
   bash "$REPAIR_SCRIPT"
 fi
 
-# ─── Ensure log directory exists ───────────────────────────────────────
-LOG_DIR="$PROJECT_ROOT/venv-logs"
-mkdir -p "$LOG_DIR"  # Create venv-logs directory if it doesn't exist
-
-# ─── MAIN VENV BOOTSTRAP LOOP ──────────────────────────────────────────
+# ─── MAIN LOOP ─────────────────────────────────────────────────────────
 cd "$PROJECT_ROOT"
 
 for dir in */; do
@@ -48,23 +50,30 @@ for dir in */; do
   [[ -d "$path" ]] || continue
   cd "$path"
 
-  echo "📦 Processing: $repo"
-
-  echo "⚙️  Bootstrapping $repo with Python $PYTHON_VERSION"
-  bash "$BOOTSTRAP_ONE" "$path"
-  direnv allow
-
-  # Correcting path to pip under the Python 3.13 environment
-  if [[ -x ".direnv/python-${PYTHON_VERSION}/bin/pip" ]]; then
-    .direnv/python-${PYTHON_VERSION}/bin/pip install --upgrade pip
-  else
-    echo "❌ pip not found in .direnv/python-${PYTHON_VERSION}/bin. Skipping pip upgrade."
+  # Skip non-Python projects
+  if [[ ! -f requirements.txt && ! -f pyproject.toml && ! -f setup.py ]]; then
+    echo "⏭️  Skipping $repo — no Python markers"
+    continue
   fi
 
-  # Save freeze log in the venv-logs folder with timestamp
-  FREEZE_LOG="$LOG_DIR/venv-freeze-$(date +'%Y%m%d-%H%M').log"
-  .direnv/python-${PYTHON_VERSION}/bin/pip freeze > "$FREEZE_LOG"
-  echo "📦 Saved freeze log: $FREEZE_LOG"
+  echo -e "\n📦 \033[1mProcessing: $repo\033[0m"
+  bash "$BOOTSTRAP_ONE" "$path"
+  direnv allow || true
+
+  VENV_PATH=".direnv/${repo}${PYSHORT}"
+  PIP="$VENV_PATH/bin/pip"
+
+  if [[ -x "$PIP" ]]; then
+    echo "🚀 Upgrading pip for $repo"
+    "$PIP" install --upgrade pip || true
+
+    TIMESTAMP="$(date +'%Y%m%d-%H%M')"
+    FREEZE_FILE="$LOG_DIR/venv-freeze-${TIMESTAMP}-${repo}${PYSHORT}.log"
+    "$PIP" freeze > "$FREEZE_FILE" || true
+    echo "📄 Freeze saved → $FREEZE_FILE"
+  else
+    echo "❌ pip not found for $repo in $PIP"
+  fi
 done
 
-echo "✅ All venvs processed!"
+echo -e "\n✅ \033[1;32mAll Python venvs have been updated and frozen\033[0m"

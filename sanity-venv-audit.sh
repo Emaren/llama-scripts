@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# sanity-venv-audit.sh — audit all Python venvs under $ROOT
 set -euo pipefail
 shopt -s nullglob
 
@@ -38,6 +39,8 @@ printf "├%s┤\n" "${brd}"
 # ───── Row Logic ─────
 for dir in "$ROOT"/*/; do
   repo=${dir%/}; repo=${repo##*/}
+
+  [[ "$repo" == "venv-logs" ]] && continue
   cd "$dir" || continue
 
   PYBIN="" VERSION="—" VTYPE="—" FAGE="—" HEALTH="❌"
@@ -48,7 +51,7 @@ for dir in "$ROOT"/*/; do
   elif [[ -x .direnv/python-3.13/bin/python ]]; then
     PYBIN=".direnv/python-3.13/bin/python"; VTYPE="direnv-legacy"
   elif [[ -d .direnv ]]; then
-    PYBIN=$(find .direnv -path '*/bin/python' -type f | head -1)
+    PYBIN=$(find .direnv -path '*/bin/python' -type f | head -n1)
     [[ -n $PYBIN ]] && VTYPE="direnv-unknown"
   elif [[ -f .python-version ]]; then
     env=$(<.python-version)
@@ -64,22 +67,28 @@ for dir in "$ROOT"/*/; do
     HINTS+=("🛠 missing")
   fi
 
-  if [[ -f venv-freeze.log ]]; then
+  # ───── Freeze audit ─────
+  mkdir -p venv-logs
+  latest_freeze=$(ls -1t venv-logs/venv-freeze-*.log 2>/dev/null | head -n1 || true)
+
+  if [[ -n "$latest_freeze" ]]; then
     if stat -f "%m" . &>/dev/null; then
-      m=$(stat -f "%m" venv-freeze.log)  # macOS
+      m=$(stat -f "%m" "$latest_freeze")  # macOS
     else
-      m=$(stat -c "%Y" venv-freeze.log)  # Linux
+      m=$(stat -c "%Y" "$latest_freeze")  # Linux
     fi
     now=$(date +%s)
     d=$(( (now - m) / 86400 ))
-    FAGE="${d}d"; (( d>0 )) && FAGE+=" 🚨"
+    FAGE="${d}d"; (( d > 0 )) && FAGE+=" 🚨"
 
     TMP_FREEZE=$(mktemp)
     "$PYBIN" -m pip freeze > "$TMP_FREEZE" 2>/dev/null || true
-    if ! diff -q "$TMP_FREEZE" venv-freeze.log &>/dev/null; then
+    if ! diff -q "$TMP_FREEZE" "$latest_freeze" &>/dev/null; then
       HINTS+=("🧹 drift")
     fi
     rm -f "$TMP_FREEZE"
+
+    ln -sf "$(basename "$latest_freeze")" venv-logs/venv-freeze.log
   else
     HINTS+=("📄 no-freeze")
   fi
@@ -98,15 +107,11 @@ for dir in "$ROOT"/*/; do
   fi
 
   HINT_TXT=$(printf "%-${w7}s" "${HINTS[*]:-}")
-  printf "$fmt" \
-    "$repo" "$VERSION" "$VTYPE" "$FAGE" "$HEALTH" "$PYPATH" "$HINT_TXT"
-
-  # ───── Move freeze logs to ./venv-logs/ ─────
-  mkdir -p "$dir/venv-logs"
-  mv -f "$dir"/venv-freeze*.log* "$dir/venv-logs/" 2>/dev/null || true
+  printf "$fmt" "$repo" "$VERSION" "$VTYPE" "$FAGE" "$HEALTH" "$PYPATH" "$HINT_TXT"
 done
 
 # ───── Footer ─────
 printf "└%s┘\n" "${brd}"
+cp "$OUTFILE" "/tmp/venv-last-successful.log"
 echo -e "\n📄 Broken or missing venvs logged to: $OUTFILE"
 echo "✅ Done."
