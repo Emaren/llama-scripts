@@ -17,12 +17,9 @@ OUTFILE="/tmp/venv-missing-$(date +%s).log"
 # ───── Path shortening logic ─────
 shorten_path() {
   case "$1" in
-    "$HOME"/*)
-      echo "${1/#$HOME/~}" ;;
-    /var/www/*)
-      echo "${1/#\/var\/www/\/var/www}" ;;
-    *)
-      echo "$1" ;;
+    "$HOME"/*) echo "${1/#$HOME/~}" ;;
+    /var/www/*) echo "${1/#\/var\/www/\/var/www}" ;;
+    *) echo "$1" ;;
   esac
 }
 
@@ -46,8 +43,10 @@ for dir in "$ROOT"/*/; do
   PYBIN="" VERSION="—" VTYPE="—" FAGE="—" HEALTH="❌"
   PYPATH="(not found)" HINTS=()
 
-  if [[ -x .direnv/python-3.13/bin/python ]]; then
-    PYBIN=".direnv/python-3.13/bin/python"; VTYPE="direnv-local"
+  if [[ -x .direnv/python-3.13.5/bin/python ]]; then
+    PYBIN=".direnv/python-3.13.5/bin/python"; VTYPE="direnv-local"
+  elif [[ -x .direnv/python-3.13/bin/python ]]; then
+    PYBIN=".direnv/python-3.13/bin/python"; VTYPE="direnv-legacy"
   elif [[ -d .direnv ]]; then
     PYBIN=$(find .direnv -path '*/bin/python' -type f | head -1)
     [[ -n $PYBIN ]] && VTYPE="direnv-unknown"
@@ -85,9 +84,26 @@ for dir in "$ROOT"/*/; do
     HINTS+=("📄 no-freeze")
   fi
 
+  # ───── Patch .envrc for clean Starship ─────
+  if [[ -x $PYBIN ]]; then
+    ENVRC_PATH="$dir/.envrc"
+    ACTIVATE_LINE="source $PYBIN/activate"
+    if [[ -f "$ENVRC_PATH" ]]; then
+      grep -vE '^export VIRTUAL_ENV=|^export PATH=|^source .*/activate|^export STARSHIP_VENV=' "$ENVRC_PATH" > "$ENVRC_PATH.tmp" || true
+      echo "$ACTIVATE_LINE" >> "$ENVRC_PATH.tmp"
+      mv "$ENVRC_PATH.tmp" "$ENVRC_PATH"
+    else
+      echo "$ACTIVATE_LINE" > "$ENVRC_PATH"
+    fi
+  fi
+
   HINT_TXT=$(printf "%-${w7}s" "${HINTS[*]:-}")
   printf "$fmt" \
     "$repo" "$VERSION" "$VTYPE" "$FAGE" "$HEALTH" "$PYPATH" "$HINT_TXT"
+
+  # ───── Move freeze logs to ./venv-logs/ ─────
+  mkdir -p "$dir/venv-logs"
+  mv -f "$dir"/venv-freeze*.log* "$dir/venv-logs/" 2>/dev/null || true
 done
 
 # ───── Footer ─────

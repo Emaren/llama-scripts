@@ -8,12 +8,12 @@ PROJECTS_PATH = os.path.join(USER_PREFIX, "projects")
 IS_VPS = socket.gethostname() == "wolo"
 
 ALL_PROJECTS = [
-    "aoe2hd-frontend", "api-staging", "app-staging", "llama-api", "llama-scripts", "token_tap_app",
+    "aoe2hd-frontend", "api-staging", "app-staging", "llama-api", "llama-scripts", "token-tap-app",
     "aoe2hd-parsing", "explorer-backup", "llama-backend", "wolo-backup",
     "api-backup", "app-backup", "explorer-prod", "llama-chat-api", "redline_legal_api", "wolo-prod",
     "api-prod", "app-prod", "explorer-staging", "llama-chat-app", "redline_legal_app", "wolo-staging",
     "api-prodf", "app_prodf", "explorerdev", "llama-dashboard", "wolochain",
-    "api-prodn", "app-prodn", "llama", "llama-frontend", "token_tap_api", "wolodev"
+    "api-prodn", "app-prodn", "llama", "llama-frontend", "token-tap-api", "wolodev"
 ]
 
 def display_path(path):
@@ -48,9 +48,10 @@ def group_and_sort_paths(path_list):
     custom_groups = {
         "redline_legal_api": "redline",
         "redline_legal_app": "redline",
-        "token_tap_api": "tokentap",
-        "token_tap_app": "tokentap",
+        "token-tap-api": "tokentap",
+        "token-tap-app": "tokentap",
     }
+
     grouped = defaultdict(list)
     for path in path_list:
         name = os.path.basename(path)

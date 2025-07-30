@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
-#!/bin/bash
 
 # Location: /var/www/api-prod/scripts/admin.sh
 
-set -e
-
-SCRIPTS_DIR="$(dirname "$0")"
+set -euo pipefail
 
 print_menu() {
   echo "=============================="
@@ -27,41 +24,21 @@ print_menu() {
 while true; do
   print_menu
   read -p "Select option: " opt
+  echo ""
 
   case $opt in
-    1)
-      bash "$SCRIPTS_DIR/check_all_users.sh"
-      ;;
-    2)
-      bash "$SCRIPTS_DIR/check_users.sh"
-      ;;
-    3)
-      python3 "$SCRIPTS_DIR/list_firebase_users.py"
-      ;;
-    4)
-      bash "$SCRIPTS_DIR/sync_data.sh"
-      ;;
-    5)
-      bash "$SCRIPTS_DIR/sync_schema.sh"
-      ;;
-    6)
-      bash "$SCRIPTS_DIR/migrate.sh"
-      ;;
-    7)
-      bash "$SCRIPTS_DIR/reset_db_for_launch.sh"
-      ;;
-    8)
-      bash "$SCRIPTS_DIR/wipe_for_launch.sh"
-      ;;
-    9)
-      bash "$SCRIPTS_DIR/wipe_users_and_game_stats.sh"
-      ;;
-    0)
-      echo "Goodbye."
-      exit 0
-      ;;
-    *)
-      echo "Invalid option."
-      ;;
+    1) check-all-users ;;
+    2) check-users ;;
+    3) list-firebase-users ;;
+    4) sync-data ;;
+    5) sync-schema ;;
+    6) migrate ;;
+    7) reset-db-for-launch ;;
+    8) wipe-for-launch ;;
+    9) wipe-users-and-game-stats ;;
+    0) echo "Goodbye."; exit 0 ;;
+    *) echo "❌ Invalid option." ;;
   esac
+
+  echo ""
 done

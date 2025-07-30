@@ -3,13 +3,21 @@ set -euo pipefail
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECTS_DIR="$HOME/projects"
-LOG="$SCRIPT_DIR/venv-missing.log"
+LOG="$(ls -t /tmp/venv-missing-*.log 2>/dev/null | head -n1 || true)"
 REPAIRED="$SCRIPT_DIR/repaired-venvs.log"
 PYSHORT="3.13"
 PYTHON_BIN="$(command -v python${PYSHORT} || true)"
 UPDATE_AFTER=false
 DRY_RUN=false
+
+# ─── DETECT ENVIRONMENT ────────────────────────────────────────────────────────
+if [[ -d "/var/www" ]]; then
+  PROJECTS_DIR="/var/www"
+  echo "🌐 Detected VPS — using PROJECTS_DIR=$PROJECTS_DIR"
+else
+  PROJECTS_DIR="$HOME/projects"
+  echo "💻 Detected Local Mac — using PROJECTS_DIR=$PROJECTS_DIR"
+fi
 
 echo "🔧 LOG = $LOG"
 echo "🔧 PWD = $(pwd)"
@@ -46,9 +54,13 @@ while read -r dir; do
   echo "📦 Repairing venv for: $dir"
 
   TARGET="$PROJECTS_DIR/$dir"
+  if [[ ! -d "$TARGET" ]]; then
+    echo "❌ Directory not found: $TARGET — skipping"
+    continue
+  fi
   cd "$TARGET"
 
-  VENV_DIR=".direnv/python-$PYSHORT"
+  VENV_DIR=".direnv/python-3.13.5"
 
   if [[ $DRY_RUN == true ]]; then
     echo "🔍 DRY RUN: Would create $VENV_DIR"
@@ -63,6 +75,10 @@ while read -r dir; do
   echo "$dir" >> "$REPAIRED"
   echo "✅ $dir done"
 done < "$LOG"
+
+# ─── RE-RUN DIRENV ALLOW ACROSS ALL PROJECTS ───────────────────────────────────
+echo "🔁 Rehydrating venvs by direnv allow…"
+find "$PROJECTS_DIR" -maxdepth 2 -name .envrc -execdir bash -c 'echo "🌱 Allowing: $(pwd)" && direnv allow' \;
 
 # ─── OPTIONAL UPDATE ───────────────────────────────────────────────────────────
 if $UPDATE_AFTER && ! $DRY_RUN; then

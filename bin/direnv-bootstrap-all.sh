@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # direnv-bootstrap-all.sh — Multi-project Python venv bootstrapper
-# 🐍 Uses Python 3.13.5 via pyenv, sets up .direnv/venv and logs summary
+# 🐍 Uses Python 3.13.5 via pyenv, sets up named .direnv/<project><pyver> and logs summary
 # ────────────────────────────────────────────────────────────────────
 # Flags:
 #   --dry-run        → Preview actions without executing
@@ -12,8 +12,15 @@ shopt -s nullglob
 
 # ──────────────── ⚙️ Config ────────────────
 PYVER="3.13.5"
-PYSHORT="3.13"
-ROOT="$HOME/projects"
+PYSHORT="313"
+
+# 🧠 Auto-detect project root
+if [[ -d "/var/www/llama-scripts" ]]; then
+  ROOT="/var/www"
+else
+  ROOT="$HOME/projects"
+fi
+
 HELPER="$ROOT/llama-scripts/bin/direnv-bootstrap.sh"
 LOGFILE="$HOME/.venv-bootstrap.log"
 UPDATED=()
@@ -49,9 +56,6 @@ echo -e "\033[1;34m🐍 Ensuring pyenv has Python $PYVER …\033[0m"
 pyenv install "$PYVER" -s
 pyenv global "$PYVER"
 
-# 🔐 Check for secrets
-[[ -f .env || -f secrets.env ]] && echo -e "🔐 \033[33m.env or secrets.env detected — ensure secrets are excluded from Git!\033[0m"
-
 # 🚫 Warn about active venv
 if [[ -n "${VIRTUAL_ENV:-}" ]]; then
   echo -e "⚠️  \033[31mActive venv detected: $VIRTUAL_ENV — consider deactivating before running this script.\033[0m"
@@ -74,18 +78,19 @@ for dir in "$ROOT"/*/; do
     continue
   fi
 
-  # Check for stale venv
-  marker="$dir/.direnv/python-$PYSHORT"
-  if [[ -d "$marker" ]]; then
-    if [[ ( -f requirements.txt && requirements.txt -nt "$marker" ) || \
-          ( -f pyproject.toml && pyproject.toml -nt "$marker" ) ]]; then
-      echo -e "⚠️  \033[33m$name — venv may be stale (dependencies updated)\033[0m"
-      STALE+=("$name")
-    else
-      echo -e "⏭️  \033[2mSkipping $name — already has .direnv/python-$PYSHORT\033[0m"
-      SKIPPED+=("$name")
-      continue
-    fi
+  NEWVENV=".direnv/${name}${PYSHORT}"
+
+  # Detect stale or mismatched venv
+  if [[ -d ".direnv/python-$PYVER" && ! -d "$NEWVENV" ]]; then
+    echo -e "♻️  \033[33m$name — migrating from python-$PYVER → $NEWVENV\033[0m"
+    mv ".direnv/python-$PYVER" "$NEWVENV"
+    sed -i.bak "s|layout python .direnv/python-$PYVER|layout python $NEWVENV|" .envrc || true
+    rm -f .envrc.bak
+    direnv allow || true
+  elif [[ -d "$NEWVENV" ]]; then
+    echo -e "⏭️  \033[2mSkipping $name — already has $NEWVENV\033[0m"
+    SKIPPED+=("$name")
+    continue
   fi
 
   echo -e "\n▶ \033[1mBootstrapping: $name\033[0m"
@@ -94,13 +99,14 @@ for dir in "$ROOT"/*/; do
   else
     "$HELPER" "$dir"
 
-    # Save freeze & diff if possible
-    FREEZE="venv-freeze-$(date +%Y%m%d-%H%M).log"
+    # Ensure envrc uses named venv
+    sed -i.bak "s|layout python .direnv/python-$PYVER|layout python $NEWVENV|" .envrc || true
+    rm -f .envrc.bak
+    direnv allow || true
+
+    # Save freeze
+    FREEZE="venv-freeze-$(date +%Y%m%d-%H%M)-${name}${PYSHORT}.log"
     pip freeze > "$FREEZE" || true
-    if [[ -f .venv-freeze-prev.log ]]; then
-      echo "🧬 Changes since last freeze:"
-      diff .venv-freeze-prev.log "$FREEZE" | grep '^[<>]' || echo "  No diff."
-    fi
     cp "$FREEZE" .venv-freeze-prev.log
 
     UPDATED+=("$name")
@@ -127,5 +133,5 @@ fi
 
 # ⏱ Done
 END=$(date +%s)
-echo -e "\n✅ \033[1;32mAll applicable Python projects are now bootstrapped with .direnv/python-$PYSHORT\033[0m"
+echo -e "\n✅ \033[1;32mAll applicable Python projects are now harmonized to .direnv/<project>${PYSHORT}\033[0m"
 echo -e "⏱ Total time: $((END - START))s"
