@@ -43,6 +43,11 @@ for dir in "$ROOT"/*/; do
   [[ "$repo" == "venv-logs" ]] && continue
   cd "$dir" || continue
 
+  # ───── Skip if no .py files and no Python metadata ─────
+  if ! find . -maxdepth 1 -name '*.py' -o -name 'requirements.txt' -o -name '.python-version' | grep -q .; then
+    continue
+  fi
+
   PYBIN="" VERSION="—" VTYPE="—" FAGE="—" HEALTH="❌"
   PYPATH="(not found)" HINTS=()
 
