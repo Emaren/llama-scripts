@@ -9,10 +9,10 @@ IS_VPS = socket.gethostname() == "wolo"
 
 ALL_PROJECTS = [
     "aoe2hd-frontend", "api-staging", "app-staging", "llama-api", "llama-scripts", "token-tap/token-tap-app",
-    "aoe2hd-parsing", "explorer-backup", "llama-backend", "wolo-backup",
+    "aoe2hd-parsing", "explorer-backup", "llama-backend", "tmail-api", "tmail-app", "wolo-backup",
     "api-backup", "app-backup", "explorer-prod", "llama-chat-api", "redline_legal_api", "wolo-prod",
     "api-prod", "app-prod", "explorer-staging", "llama-chat-app", "redline_legal_app", "wolo-staging",
-    "api-prodf", "app_prodf", "explorerdev", "llama-dashboard", "wolochain",
+    "api-prodf", "app_prodf", "explorerdev", "llama-dashboard", "tmail", "wolochain",
     "api-prodn", "app-prodn", "llama", "llama-frontend", "token-tap/token-tap-api", "wolodev"
 ]
 
@@ -48,8 +48,11 @@ def group_and_sort_paths(path_list):
     custom_groups = {
         "redline_legal_api": "redline",
         "redline_legal_app": "redline",
-        "token-tap/token-tap-app": "tokentap",
+        "tmail": "tmail", 
+        "tmail-app": "tmail", 
+        "tmail-api": "tmail", 
         "token-tap/token-tap-api": "tokentap",
+        "token-tap/token-tap-app": "tokentap",
     }
 
     grouped = defaultdict(list)
