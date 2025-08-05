@@ -5,3 +5,4 @@
 venv-freeze-*.log.prev
 venv-freeze-*.log
 venv-logs/
+llama-scripts/
