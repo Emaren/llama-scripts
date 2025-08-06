@@ -1,6 +1,0 @@
-venv-freeze-*.log
-venv-freeze-*.log.prev
-.envrc
-.direnv/
-.python-version
-venv-logs/
